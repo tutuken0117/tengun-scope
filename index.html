@@ -681,6 +681,8 @@ input,select{font-family:inherit}
     <select id="planSpot"><option value="0">入れない</option><option value="2">2 m ごと</option><option value="5">5 m ごと</option><option value="10" selected>10 m ごと</option><option value="20">20 m ごと</option></select></div>
   <div class="row"><label>縮尺(文字)</label>
     <select id="planScale"><option value="100">1/100</option><option value="200">1/200</option><option value="250">1/250</option><option value="500" selected>1/500</option><option value="1000">1/1000</option></select></div>
+  <div class="row"><label>用紙(横置き)</label>
+    <select id="cadPaper"><option value="-1" selected>自動(入る一番小さい用紙)</option><option value="0">A4</option><option value="1">A3</option><option value="2">A2</option><option value="3">A1</option><option value="4">A0</option></select></div>
   <div class="row"><label>単位</label>
     <select id="cadUnit"><option value="m">m(メートル)</option><option value="mm">mm(ミリ)</option></select></div>
   <div class="row"><label>文字コード</label>
@@ -695,6 +697,7 @@ input,select{font-family:inherit}
     <b>レイヤ</b>: 主曲線 / 計曲線(5本ごと) / 等高線文字 / 標高点 / 外形線 / 標定点 / 点群 / 作図の種類ごと(道路端・側溝・建物など)<br>
     日本語が文字化けする場合は文字コードを「UTF-8」にしてください(レイヤ名が英語になります)。この設定は断面・縦断図にも使われます。<br>
     <b>座標</b>: 図面の横(x)=東(公共Y)、縦(y)=北(公共X)。等高線は標高を持った線です。<br>
+    <b>用紙</b>: 選んだ縮尺と用紙で、図形が用紙の真ん中に来る位置を書き込みます(図形の座標は動かしません)。CAD側でも同じ縮尺・用紙にしてください。断面・縦断図にもこの用紙の設定を使います。<br>
     断面図・連続横断図・縦断図は「⛰️断面」で線を引いてから出力します。
   </p>
 </div>
@@ -768,7 +771,7 @@ input,select{font-family:inherit}
     対応形式: <b>XYZ / CSV / TXT / PTS</b>(テキスト) ・ <b>LAS</b> ・ <b>PLY</b><br>
     Scaniverse等のiPhoneスキャンアプリのPLYもOK<br>
     ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。<br>
-    バージョン 2026-10-01d
+    バージョン 2026-10-01e
   </div>
 </div>
 
@@ -2593,7 +2596,11 @@ class DxfWriter{
         // 図形が入る一番小さい用紙(横置き・余白10mm)を、図形の中心に置く
         const k = this.scale/1000*this.f;   // 紙面1mm あたりの図面単位
         const papers = [[297,210],[420,297],[594,420],[841,594],[1189,841]];
-        const pp = papers.find(q => (q[0]-20)*k >= x1-x0 && (q[1]-20)*k >= y1-y0) || papers[papers.length-1];
+        const sel = parseInt($('cadPaper').value);
+        const pi = sel >= 0 ? sel : Math.max(0, papers.findIndex(q => (q[0]-20)*k >= x1-x0 && (q[1]-20)*k >= y1-y0));
+        const fits = papers[pi][0]*k >= x1-x0 && papers[pi][1]*k >= y1-y0;
+        const pp = sel < 0 && !fits ? papers[papers.length-1] : papers[pi];
+        this.paper = 'A' + (4 - papers.indexOf(pp)) + (pp[0]*k >= x1-x0 && pp[1]*k >= y1-y0 ? '' : '(はみ出します)');
         const cx = (x0+x1)/2, cy = (y0+y1)/2, w = pp[0]*k, hh = pp[1]*k;
         xy('$LIMMIN', cx-w/2, cy-hh/2); xy('$LIMMAX', cx+w/2, cy+hh/2);
       }
@@ -2796,7 +2803,8 @@ function exportPlanDXF(){
   }
   let traceCount = 0;
   if($('planTrace').checked && traces.length) traceCount = writeTraces(dxf, $('trace3d').checked);
-  return {blob: dxf.toBlob(), msg: `等高線 ${fmtInt(lineCount)} 本・標高点 ${fmtInt(spotCount)} 点・作図 ${traceCount} 個`};
+  const blob = dxf.toBlob();
+  return {blob, msg: `等高線 ${fmtInt(lineCount)} 本・標高点 ${fmtInt(spotCount)} 点・作図 ${traceCount} 個・用紙 ${dxf.paper || '-'}(1/${dxf.scale})`};
 }
 
 /* --- 断面の地盤線を作る(区間ごとの中央値) --- */
