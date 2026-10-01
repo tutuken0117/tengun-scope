@@ -794,7 +794,7 @@ input,select{font-family:inherit}
     対応形式: <b>XYZ / CSV / TXT / PTS</b>(テキスト) ・ <b>LAS</b> ・ <b>PLY</b><br>
     Scaniverse等のiPhoneスキャンアプリのPLYもOK<br>
     ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。<br>
-    バージョン 2026-10-01g
+    バージョン 2026-10-01h
   </div>
 </div>
 
@@ -1349,22 +1349,34 @@ async function parsePLY(buffer){
 async function buildCloud(data){
   setLoadingText('3D表示を準備中...');
   await tick();
-  const n = data.xs.length;
+  const n = data.positions ? data.positions.length/3 : data.xs.length;
 
-  // 重心で中心化(測量座標の精度落ち対策)
-  let cx=0, cy=0, cz=0;
-  for(let i=0;i<n;i++){ cx+=data.xs[i]; cy+=data.ys[i]; cz+=data.zs[i]; }
-  cx/=n; cy/=n; cz/=n;
-  globalOffset = {x:cx, y:cy, z:cz};
-
-  positions = new Float32Array(n*3);
   let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,minZ=Infinity,maxZ=-Infinity;
-  for(let i=0;i<n;i++){
-    const x = data.xs[i]-cx, y = data.ys[i]-cy, z = data.zs[i]-cz;
-    positions[i*3]=x; positions[i*3+1]=y; positions[i*3+2]=z;
-    if(x<minX)minX=x; if(x>maxX)maxX=x;
-    if(y<minY)minY=y; if(y>maxY)maxY=y;
-    if(z<minZ)minZ=z; if(z>maxZ)maxZ=z;
+  if(data.positions){
+    // 前回の続き(保存してあった点群をそのまま使う)
+    positions = data.positions;
+    globalOffset = {...data.offset};
+    for(let i=0;i<n;i++){
+      const x = positions[i*3], y = positions[i*3+1], z = positions[i*3+2];
+      if(x<minX)minX=x; if(x>maxX)maxX=x;
+      if(y<minY)minY=y; if(y>maxY)maxY=y;
+      if(z<minZ)minZ=z; if(z>maxZ)maxZ=z;
+    }
+  }else{
+    // 重心で中心化(測量座標の精度落ち対策)
+    let cx=0, cy=0, cz=0;
+    for(let i=0;i<n;i++){ cx+=data.xs[i]; cy+=data.ys[i]; cz+=data.zs[i]; }
+    cx/=n; cy/=n; cz/=n;
+    globalOffset = {x:cx, y:cy, z:cz};
+
+    positions = new Float32Array(n*3);
+    for(let i=0;i<n;i++){
+      const x = data.xs[i]-cx, y = data.ys[i]-cy, z = data.zs[i]-cz;
+      positions[i*3]=x; positions[i*3+1]=y; positions[i*3+2]=z;
+      if(x<minX)minX=x; if(x>maxX)maxX=x;
+      if(y<minY)minY=y; if(y>maxY)maxY=y;
+      if(z<minZ)minZ=z; if(z>maxZ)maxZ=z;
+    }
   }
   zMinLocal = minZ; zMaxLocal = maxZ;
   cloudRadius = Math.max(maxX-minX, maxY-minY, maxZ-minZ) / 2 || 1;
@@ -1428,6 +1440,7 @@ async function buildCloud(data){
   $('viewBar').style.display = '';
   setMode('view');
   hideLoading();
+  scheduleCloudSave();
   toast('読み込み完了!指でぐるぐる回してみてください 🖐️');
 }
 
@@ -1875,6 +1888,7 @@ function recomputeBounds(){
   zMinLocal = minZ; zMaxLocal = maxZ;
   cloudBox = {minX,maxX,minY,maxY,minZ,maxZ};
   pointsObj.geometry.computeBoundingSphere();
+  scheduleCloudSave();
 }
 
 function updateInfo(){
@@ -4929,6 +4943,7 @@ function refreshAfterTransform(){
     `<br>高さ: ${fmt(realZ(minZ),2)} 〜 ${fmt(realZ(maxZ),2)} m` +
     (rgbColors ? '<br>色情報: あり(RGB)' : '<br>色情報: なし(高さで色分け)');
   updateInfo();
+  scheduleCloudSave();
 }
 
 /* =========================================================
@@ -4995,6 +5010,86 @@ async function loadFile(file){
     console.error(err);
     toast('⚠️ ' + (err.message || '読み込みに失敗しました'), 5000);
   }
+}
+
+/* =========================================================
+   前回の続き(リロードしても作業を続けられるよう、この端末の中に自動保存)
+   点群は IndexedDB、画面の状態は localStorage
+   ========================================================= */
+const SES_UI = 'tengun_session_ui';
+let sesTimer = 0, sesRestoring = false;
+function sesDB(){
+  return new Promise((res, rej) => {
+    const q = indexedDB.open('tengun_scope', 1);
+    q.onupgradeneeded = () => q.result.createObjectStore('session');
+    q.onsuccess = () => res(q.result);
+    q.onerror = () => rej(q.error);
+  });
+}
+function scheduleCloudSave(){
+  if(sesRestoring || !positions) return;
+  clearTimeout(sesTimer);
+  sesTimer = setTimeout(saveCloudSession, 300);
+}
+async function saveCloudSession(){
+  clearTimeout(sesTimer); sesTimer = 0;
+  try{
+    const db = await sesDB();
+    const tx = db.transaction('session', 'readwrite');
+    tx.objectStore('session').put({
+      positions, colors: rgbColors, offset: {...globalOffset}, name: loadedFileName,
+      upAxis: currentUpAxis, step: sampleStep, total: pointCountTotal
+    }, 'cloud');
+    tx.oncomplete = () => db.close();
+    tx.onerror = tx.onabort = () => { console.warn('自動保存に失敗', tx.error); db.close(); };
+  }catch(e){ console.warn('自動保存に失敗', e); }
+}
+function saveUiSession(){
+  if(!positions) return;
+  if(sesTimer) saveCloudSession();
+  try{
+    localStorage.setItem(SES_UI, JSON.stringify({
+      mode, cam: {t: controls.target.toArray(), theta: controls.theta, phi: controls.phi, radius: controls.radius},
+      colorMode: $('colorMode').value, ptSize: $('ptSize').value, volBase: $('volBase').value,
+      volPoly: volPoly && volPoly.closed ? volPoly : null, gcps, traces
+    }));
+  }catch(e){}
+}
+async function restoreSession(){
+  let rec = null;
+  try{
+    const db = await sesDB();
+    rec = await new Promise((res, rej) => {
+      const r = db.transaction('session').objectStore('session').get('cloud');
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    });
+    db.close();
+  }catch(e){ return; }
+  if(!rec || !rec.positions || !rec.positions.length || positions) return;
+  sesRestoring = true;
+  showLoading('前回の続きを開いています...');
+  try{
+    loadedFileName = rec.name || 'pointcloud';
+    await buildCloud({positions: rec.positions, offset: rec.offset, colors: rec.colors, total: rec.total, step: rec.step});
+    currentUpAxis = rec.upAxis || 'Z'; $('upAxis').value = currentUpAxis;
+    let ui = null;
+    try{ ui = JSON.parse(localStorage.getItem(SES_UI) || 'null'); }catch(e){}
+    if(ui){
+      if(ui.gcps){ gcps = ui.gcps; renderGcpList(); }
+      if(ui.traces && ui.traces.length){ traces = ui.traces; traceChanged(false); $('traceRestoreBtn').style.display = 'none'; }
+      if(ui.ptSize){ $('ptSize').value = ui.ptSize; $('ptSize').dispatchEvent(new Event('input')); }
+      if(ui.colorMode && (ui.colorMode !== 'rgb' || rgbColors)){
+        traceColorInit = true;
+        if(ui.colorMode !== $('colorMode').value){ $('colorMode').value = ui.colorMode; $('colorMode').dispatchEvent(new Event('change')); }
+      }
+      if(ui.volBase) $('volBase').value = ui.volBase;
+      if(ui.volPoly) volPoly = ui.volPoly;
+      setMode($('panel-'+ui.mode) || ui.mode === 'view' ? ui.mode : 'view');
+      if(ui.cam) controls.setPose(new THREE.Vector3().fromArray(ui.cam.t), ui.cam.theta, ui.cam.phi, ui.cam.radius, false);
+    }
+    toast('前回の続きから再開しました。別のデータは 📂 から開けます', 4000);
+  }catch(e){ console.error(e); hideLoading(); }
+  sesRestoring = false;
 }
 
 /* =========================================================
@@ -5371,6 +5466,10 @@ function wireUI(){
 initThree();
 controls.dragHook = dragDispatch;
 wireUI();
+window.addEventListener('pagehide', saveUiSession);
+window.addEventListener('beforeunload', saveUiSession);
+document.addEventListener('visibilitychange', () => { if(document.hidden) saveUiSession(); });
+restoreSession();
 </script>
 </body>
 </html>
