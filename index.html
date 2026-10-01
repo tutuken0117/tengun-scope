@@ -767,7 +767,8 @@ input,select{font-family:inherit}
   <div id="formats">
     対応形式: <b>XYZ / CSV / TXT / PTS</b>(テキスト) ・ <b>LAS</b> ・ <b>PLY</b><br>
     Scaniverse等のiPhoneスキャンアプリのPLYもOK<br>
-    ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。
+    ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。<br>
+    バージョン 2026-10-01b
   </div>
 </div>
 
@@ -3872,7 +3873,9 @@ function addVolVertex(x, y){
     const s = volScr(f);
     if(Math.hypot(x-s[0], y-s[1]) < 12){ closeVolPoly(); return; }
   }
-  const lp = pickQuiet(x, y) || hitAtZ(x, y, volBaseLocal());
+  // 高さは近くの点から取り、平面位置はクリックした位置そのものにする(近くの点に吸い付くとずれて見える)
+  const near = pickQuiet(x, y);
+  const lp = (near && hitAtZ(x, y, near.z)) || near || hitAtZ(x, y, volBaseLocal());
   if(!lp) return;
   volPoly.pts.push({x: lp.x+globalOffset.x, y: lp.y+globalOffset.y, z: lp.z});
   updateVolUI();
