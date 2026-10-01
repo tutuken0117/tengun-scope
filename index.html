@@ -662,6 +662,11 @@ input,select{font-family:inherit}
         </select></div>
       <div class="btnRow"><button class="btn" id="lxSaveBtn">💾 LandXML(SiTECH 3D向け)</button><button class="btn ghost" id="tinDxfBtn">💾 DXF(3DFACE)</button></div>
       <p class="hint" style="margin-top:6px">LandXMLは「3次元設計データ交換標準」のTIN(Surface)形式です。SiTECH 3Dでは現況地形として読み込めます。</p>
+      <div class="secTitle" style="margin-top:14px">TINを手で直す</div>
+      <p class="hint">とがった所・へこんだ所の点を消すと、周りの点で面を貼り直します(点群は変わりません)。横から見ると飛び出した点が見つけやすいです。「現況TINを作る」を押し直すと、手で直した内容は消えます。</p>
+      <div class="btnRow"><button class="btn ghost" id="tinPickBtn">👆 点をクリックして消す</button><button class="btn ghost" id="tinPolyBtn">✏️ 範囲を囲んで消す</button></div>
+      <div class="btnRow" id="tinEditRow" style="display:none"><button class="btn" id="tinPolyClose">範囲を確定</button><button class="btn ghost" id="tinEditStop">やめる</button></div>
+      <div class="btnRow"><button class="btn ghost" id="tinUndoBtn" disabled>↩️ TINの修正を元に戻す(Ctrl+Z)</button></div>
     </div>
   </div>
 
@@ -798,7 +803,7 @@ input,select{font-family:inherit}
     対応形式: <b>XYZ / CSV / TXT / PTS</b>(テキスト) ・ <b>LAS</b> ・ <b>PLY</b><br>
     Scaniverse等のiPhoneスキャンアプリのPLYもOK<br>
     ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。<br>
-    バージョン 2026-10-01j
+    バージョン 2026-10-01k
   </div>
 </div>
 
@@ -817,7 +822,7 @@ input,select{font-family:inherit}
     <div class="helpItem"><div class="ic">✂️</div><div><b>除去モード</b><p>範囲を囲んで削除/切り抜き、ノイズ除去、高さ除去、地表面抽出、間引き。失敗しても「↩️元に戻す」(Ctrl+Z)で戻せます(5回まで)。</p></div></div>
     <div class="helpItem"><div class="ic">📍</div><div><b>座標モード</b><p>標定点をクリックして既知座標を入力 →「計算する」で較差を確認 →「適用」で公共座標に合わせます。</p></div></div>
     <div class="helpItem"><div class="ic">🧩</div><div><b>点群をつなぐ</b><p>処理済み(座標付き)のLASはそのまま重ね、直接取ったPLYは標定点か共通点で位置を合わせてからつなぎます。1スキャンずつ処理してからつなぐのがおすすめです。</p></div></div>
-    <div class="helpItem"><div class="ic">🔺</div><div><b>TIN・計画面</b><p>点群から現況TINを作ってLandXML(SiTECH 3D向け)で保存。設計の計画面(LandXML)を読み込むと、TIN同士の比較で土量を計算し、差をヒートマップで表示。断面図・縦断図にも計画線が入ります。</p></div></div>
+    <div class="helpItem"><div class="ic">🔺</div><div><b>TIN・計画面</b><p>点群から現況TINを作ってLandXML(SiTECH 3D向け)で保存。設計の計画面(LandXML)を読み込むと、TIN同士の比較で土量を計算し、差をヒートマップで表示。断面図・縦断図にも計画線が入ります。作ったTINは「TINを手で直す」で、とがった点をクリックするか範囲を囲んで消すと、面を貼り直せます。</p></div></div>
     <div class="helpItem"><div class="ic">✏️</div><div><b>作図(現況構造物)</b><p>道路端・側溝・擁壁・建物・電柱などを点群の上からなぞって描きます。真上の平行投影で表示され、「段差・勾配を強調」の色で縁石や法肩の線が見やすくなります。Enter=確定 / C=閉じる / Shift=直角 / Ctrl+Z=元に戻す。</p></div></div>
     <div class="helpItem"><div class="ic">📐</div><div><b>図面(CAD出力)</b><p>「📐図面」で等高線・標高点の平面図、「⛰️断面」で線を引いて断面図・連続横断図・縦断図をDXFで出力。曲がった道路は「線の引き方」を「中心線(折れ線)」にします。</p></div></div>
     <div class="helpItem"><div class="ic">💾</div><div><b>出力モード</b><p>編集した点群をLAS・CSV・TXTで保存します。点密度チェックもここ。</p></div></div>
@@ -1515,8 +1520,12 @@ function pickPoint(clientX, clientY){
 function closePanel(){ document.querySelectorAll('.panel.open').forEach(p => p.classList.remove('open')); }
 function onTap(clientX, clientY, btn=0){
   if(!pointsObj) return;
-  if(mode === 'edit' && poly){
+  if((mode === 'edit' || mode === 'tin') && poly){
     if(btn === 2) closePolygon(); else addPolyVertex(clientX, clientY);
+    return;
+  }
+  if(mode === 'tin' && tinPick){
+    if(btn === 0) tinPickAt(clientX, clientY);
     return;
   }
   if(mode === 'trace'){
@@ -1991,7 +2000,7 @@ function updateUndoBtn(){
 }
 function resetEditState(){
   cancelMerge(true); mergeHistory = []; renderMergeHistory();
-  tinEx = null; diffResult = null;
+  tinEx = null; diffResult = null; tinUndoStack = []; tinPick = false;
   traces = []; traceCur = null; traceUndoStack = [];
   rebuildTraceScene(); renderTraceList(); checkTraceRestore();
   resetClip();
@@ -2075,10 +2084,11 @@ function addPolyVertex(x, y){
 function closePolygon(){
   if(!poly) return;
   if(poly.pts.length < 3){ toast('3か所以上クリックして囲んでください'); return; }
-  const pts = poly.pts.map(toScreen);
+  const pts = poly.pts.map(toScreen), forTin = poly.tin;
   poly = null;
   controls.lockRotate = false;
   setGuide('');
+  if(forTin){ tinRemoveInScreenPoly(pts); if(mode === 'tin' && tinEx) startTinPoly(); return; }
   const r = computeSelection(pts);
   if(r.cnt === 0){
     selMask = null; toast('囲んだ範囲に点がありませんでした');
@@ -3744,7 +3754,7 @@ function mapTraces(fn){
   volPoly = null; volResult = null; diffResult = null;
   if(tinEx){
     for(let i=0;i<tinEx.pts.length;i+=3){ const q = fn({x:tinEx.pts[i], y:tinEx.pts[i+1], z:tinEx.pts[i+2]}); tinEx.pts[i]=q.x; tinEx.pts[i+1]=q.y; tinEx.pts[i+2]=q.z; }
-    tinEx._loc = null;
+    tinEx._loc = null; tinEx.fill = new Set(); tinUndoStack = [];
   }
   for(const f of traces) f.pts = f.pts.map(fn);
   if(traceCur) traceCur.pts = traceCur.pts.map(fn);
@@ -4269,7 +4279,131 @@ function buildTinFromCloud(){
     if(e(a,b) > m2 || e(b,c) > m2 || e(c,a) > m2) continue;
     out.push(a, b, c);
   }
-  return {pts, tri: Uint32Array.from(out), name: $('tinName').value || '現況地形', removed};
+  return {pts, tri: Uint32Array.from(out), name: $('tinName').value || '現況地形', removed, cell, maxE, fill: new Set(), edited: 0};
+}
+
+/* --- TINを手で直す(点を消して、周りの点で面を貼り直す) --- */
+let tinPick = false, tinUndoStack = [];
+const tinFillKey = (tin, x, y) => Math.floor(x/tin.cell) + ',' + Math.floor(y/tin.cell);
+// keep[i]=1 の頂点だけで貼り直す。消した所は長い三角形でもふさぐ
+function tinWithout(tin, keep){
+  const p = tin.pts, n = p.length/3;
+  let k = 0; for(let i=0;i<n;i++) if(keep[i]) k++;
+  if(k === n) return null;
+  if(k < 3) throw new Error('点が少なくなりすぎます');
+  const pts = new Float64Array(k*3), xy = new Float64Array(k*2), fill = new Set(tin.fill);
+  const ox = p[0], oy = p[1];
+  for(let i=0, j=0;i<n;i++){
+    if(!keep[i]){ fill.add(tinFillKey(tin, p[i*3], p[i*3+1])); continue; }
+    pts[j*3] = p[i*3]; pts[j*3+1] = p[i*3+1]; pts[j*3+2] = p[i*3+2];
+    xy[j*2] = p[i*3]-ox; xy[j*2+1] = p[i*3+1]-oy; j++;
+  }
+  const T = new Delaunator(xy).triangles, out = [], m2 = tin.maxE*tin.maxE, c = tin.cell;
+  const e = (a, b) => (xy[a*2]-xy[b*2])**2 + (xy[a*2+1]-xy[b*2+1])**2;
+  const filled = (x, y) => {
+    for(let dx=-1;dx<=1;dx++) for(let dy=-1;dy<=1;dy++) if(fill.has(tinFillKey(tin, x+dx*c, y+dy*c))) return true;
+    return false;
+  };
+  for(let t=0;t<T.length;t+=3){
+    const a=T[t], b=T[t+1], d=T[t+2];
+    if((e(a,b) > m2 || e(b,d) > m2 || e(d,a) > m2) &&
+       !filled((pts[a*3]+pts[b*3]+pts[d*3])/3, (pts[a*3+1]+pts[b*3+1]+pts[d*3+1])/3)) continue;
+    out.push(a, b, d);
+  }
+  return {...tin, pts, tri: Uint32Array.from(out), fill, edited: tin.edited + (n-k), _loc: null};
+}
+function applyTinEdit(keep){
+  const t = tinWithout(tinEx, keep);
+  if(!t) return 0;
+  tinUndoStack.push(tinEx); if(tinUndoStack.length > 30) tinUndoStack.shift();
+  const removedN = tinEx.pts.length/3 - t.pts.length/3;
+  tinEx = t;
+  if(diffResult){ diffResult = null; applyColors(); }
+  refreshTinMeshes(); updateTinUI();
+  return removedN;
+}
+function tinUndoEdit(){
+  const t = tinUndoStack.pop();
+  if(!t){ toast('元に戻せるTINの修正はありません'); return; }
+  tinEx = t;
+  if(diffResult){ diffResult = null; applyColors(); }
+  refreshTinMeshes(); updateTinUI();
+  toast('TINの修正を取り消しました ↩️');
+}
+// TINの頂点を画面の位置に写す(見えない点は NaN)
+function tinScreenXY(){
+  camera.updateMatrixWorld();
+  camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+  const m = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).elements;
+  const W = window.innerWidth, H = window.innerHeight, o = globalOffset, p = tinEx.pts, n = p.length/3;
+  const s = new Float32Array(n*2);
+  for(let i=0;i<n;i++){
+    const x = p[i*3]-o.x, y = p[i*3+1]-o.y, z = p[i*3+2]-o.z;
+    const w = m[3]*x + m[7]*y + m[11]*z + m[15];
+    if(w <= 0){ s[i*2] = s[i*2+1] = NaN; continue; }
+    s[i*2] = ((m[0]*x + m[4]*y + m[8]*z + m[12])/w + 1) * 0.5 * W;
+    s[i*2+1] = (1 - (m[1]*x + m[5]*y + m[9]*z + m[13])/w) * 0.5 * H;
+  }
+  return s;
+}
+function startTinPick(){
+  if(!tinEx) return;
+  stopTinEdit();
+  if(!$('showTinEx').checked){ $('showTinEx').checked = true; refreshTinMeshes(); }
+  tinPick = true;
+  setGuide('👆 消したい点(とがった先・へこんだ底)をクリック。ドラッグで視点を動かせます(Esc でやめる)');
+  updateTinUI();
+}
+function startTinPoly(){
+  if(!tinEx) return;
+  stopTinEdit();
+  if(!$('showTinEx').checked){ $('showTinEx').checked = true; refreshTinMeshes(); }
+  poly = {pts:[], plane:null, tin:true};
+  setGuide('✏️ 向きを決めて、消したい所をクリックで囲む → 最初の点・右クリック・Enter で確定(Esc でやめる)');
+  updateTinUI();
+}
+function stopTinEdit(){
+  const was = tinPick || (poly && poly.tin);
+  tinPick = false;
+  if(poly && poly.tin){ poly = null; controls.lockRotate = false; }
+  if(was) setGuide('');
+  updateTinUI();
+}
+// クリックした面の3つの角のうち、クリック位置に一番近い点を消す
+function tinPickAt(x, y){
+  if(!tinExMesh) return;
+  const ndc = new THREE.Vector2((x/window.innerWidth)*2-1, -(y/window.innerHeight)*2+1);
+  raycaster.setFromCamera(ndc, camera);
+  const hit = raycaster.intersectObject(tinExMesh.children[0])[0];
+  if(!hit){ toast('TINの面の上をクリックしてください'); return; }
+  const s = tinScreenXY();
+  let best = -1, bd = Infinity;
+  for(const v of [hit.face.a, hit.face.b, hit.face.c]){
+    const d = Math.hypot(s[v*2]-x, s[v*2+1]-y);
+    if(d < bd){ bd = d; best = v; }
+  }
+  const keep = new Uint8Array(tinEx.pts.length/3).fill(1);
+  keep[best] = 0;
+  try{ if(applyTinEdit(keep)) toast('点を1個消して、面を貼り直しました'); }
+  catch(e){ toast('⚠️ ' + e.message, 4000); }
+}
+// 画面上で囲んだ中にある頂点をすべて消す(奥にある点も含む)
+function tinRemoveInScreenPoly(pts){
+  const s = tinScreenXY(), n = tinEx.pts.length/3, np = pts.length;
+  const keep = new Uint8Array(n).fill(1);
+  for(let i=0;i<n;i++){
+    const sx = s[i*2], sy = s[i*2+1];
+    if(Number.isNaN(sx)) continue;
+    let inside = false;
+    for(let a=0, b=np-1; a<np; b=a++){
+      if(((pts[a][1]>sy) !== (pts[b][1]>sy)) && (sx < (pts[b][0]-pts[a][0])*(sy-pts[a][1])/(pts[b][1]-pts[a][1]) + pts[a][0])) inside = !inside;
+    }
+    if(inside) keep[i] = 0;
+  }
+  try{
+    const c = applyTinEdit(keep);
+    toast(c ? `点を ${fmtInt(c)} 個消して、面を貼り直しました` : '囲んだ範囲にTINの点がありませんでした');
+  }catch(e){ toast('⚠️ ' + e.message, 4000); }
 }
 // 周りの高さから大きく外れた点を除く(消し残った建物・重機、地面の下のノイズ)
 // 点をはさんで向かい合う2点の平均と比べるので、一様な斜面やデータの端では除かれない
@@ -4436,8 +4570,15 @@ function updateTinUI(){
   if(!$('tinExInfo')) return;
   $('tinExInfo').innerHTML = tinEx
     ? `✅ ${esc(tinEx.name)}:点 ${fmtInt(tinEx.pts.length/3)}・三角形 ${fmtInt(tinEx.tri.length/3)}・面積 ${fmt(tinArea(tinEx),1)} m²` +
-      (tinEx.removed ? `<br>周りから外れた点を <b>${fmtInt(tinEx.removed)}</b> 個除きました` : '')
+      (tinEx.removed ? `<br>周りから外れた点を <b>${fmtInt(tinEx.removed)}</b> 個除きました` : '') +
+      (tinEx.edited ? `<br>手で消した点: <b>${fmtInt(tinEx.edited)}</b> 個` : '')
     : 'まだ作成していません。';
+  const drawing = !!(poly && poly.tin);
+  $('tinPickBtn').classList.toggle('ghost', !tinPick);
+  $('tinPolyBtn').classList.toggle('ghost', !drawing);
+  $('tinEditRow').style.display = (tinPick || drawing) ? '' : 'none';
+  $('tinPolyClose').style.display = drawing ? '' : 'none';
+  $('tinUndoBtn').disabled = !tinUndoStack.length;
   $('tinDsInfo').innerHTML = tinDs
     ? `✅ ${esc(tinDs.name)}:点 ${fmtInt(tinDs.pts.length/3)}・三角形 ${fmtInt(tinDs.tri.length/3)}・面積 ${fmt(tinArea(tinDs),1)} m²`
     : 'まだ読み込んでいません。';
@@ -4446,7 +4587,7 @@ function updateTinUI(){
 }
 function clearTins(msg){
   if(!tinEx && !tinDs) return;
-  tinEx = null; diffResult = null;
+  tinEx = null; diffResult = null; tinUndoStack = []; stopTinEdit();
   if(tinDs) tinDs._loc = null;
   refreshTinMeshes(); updateTinUI();
   if(msg) toast(msg, 4000);
@@ -4616,6 +4757,7 @@ function showDiffColors(){
 /* --- TINパネルを開いたとき --- */
 function enterTinMode(){ updateTinUI(); refreshTinMeshes(); if(diffResult) showDiffColors(); }
 function leaveTinMode(){
+  stopTinEdit();
   disposeGroup(tinExMesh); disposeGroup(tinDsMesh); tinExMesh = tinDsMesh = null;
   if(pointsObj) pointsObj.visible = true;
   if(diffResult) applyColors();
@@ -5402,10 +5544,16 @@ function wireUI(){
   $('mergePairList').addEventListener('click', mdel);
   // TIN
   $('tinBuildBtn').addEventListener('click', ()=> runHeavy('TINを作成中...', ()=>{
-    tinEx = buildTinFromCloud(); diffResult = null;
+    stopTinEdit();
+    tinEx = buildTinFromCloud(); diffResult = null; tinUndoStack = [];
     refreshTinMeshes(); updateTinUI();
     toast(`現況TINを作りました(三角形 ${fmtInt(tinEx.tri.length/3)})`);
   }));
+  $('tinPickBtn').addEventListener('click', ()=> tinPick ? stopTinEdit() : startTinPick());
+  $('tinPolyBtn').addEventListener('click', ()=> (poly && poly.tin) ? stopTinEdit() : startTinPoly());
+  $('tinPolyClose').addEventListener('click', closePolygon);
+  $('tinEditStop').addEventListener('click', stopTinEdit);
+  $('tinUndoBtn').addEventListener('click', tinUndoEdit);
   $('lxSaveBtn').addEventListener('click', ()=>{
     if(!tinEx) return;
     tinEx.name = $('tinName').value || '現況地形';
@@ -5491,7 +5639,7 @@ function wireUI(){
     }
     if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !typing){
       e.preventDefault();
-      if(mode === 'trace') traceUndo(); else undo();
+      if(mode === 'trace') traceUndo(); else if(mode === 'tin' && tinUndoStack.length) tinUndoEdit(); else undo();
       return;
     }
     if(typing) return;
@@ -5507,6 +5655,7 @@ function wireUI(){
     }
     if(e.key === 'Enter' && poly){ e.preventDefault(); closePolygon(); }
     else if(e.key === 'Escape'){
+      if(tinPick || (poly && poly.tin)) stopTinEdit();
       if(poly || selMask) cancelSelection();
       if(coordPickMode) endCoordPick();
       if(volPick) endVolPick();
