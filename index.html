@@ -460,7 +460,8 @@ input,select{font-family:inherit}
 <div class="panel" id="panel-edit">
   <h3>✂️ 不要な点の除去</h3>
   <div class="secTitle">① 範囲を囲んで除去(手動)</div>
-  <p class="hint">画面上で範囲を囲むと、その中の点を選択します。「⬇️真上」視点で囲むと分かりやすいです。囲んでいる途中もドラッグで移動、ホイールで拡大縮小できます。</p>
+  <p class="hint">画面上で範囲を囲むと、その中の点を選択します。「範囲を描く」を押すと、真上から全体が見える視点に切り替わります。囲んでいる途中もドラッグで移動、ホイールで拡大縮小できます。</p>
+  <label class="chkRow" style="margin-top:6px"><input type="checkbox" id="polyTop" checked> 真上・全体表示に切り替えてから囲む(横から囲みたい時は外す)</label>
   <div class="btnRow" id="polyStartRow"><button class="btn" id="polyStartBtn">✏️ 範囲を描く</button></div>
   <div id="polyDrawRow" style="display:none">
     <p class="hint" id="polyCount" style="margin-top:8px"></p>
@@ -794,7 +795,7 @@ input,select{font-family:inherit}
     対応形式: <b>XYZ / CSV / TXT / PTS</b>(テキスト) ・ <b>LAS</b> ・ <b>PLY</b><br>
     Scaniverse等のiPhoneスキャンアプリのPLYもOK<br>
     ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。<br>
-    バージョン 2026-10-01h
+    バージョン 2026-10-01i
   </div>
 </div>
 
@@ -2027,6 +2028,8 @@ let lastMouse = null;
 function startPolygon(){
   if(!positions) return;
   cancelSelection();
+  // 真上・全体が見える引きの視点にしてから囲む
+  if($('polyTop').checked){ setView('top', false); controls.update(); }
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
   // 頂点は「画面に平行な平面」上の3D位置で覚える → 拡大・移動してもずれない
