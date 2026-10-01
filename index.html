@@ -768,7 +768,7 @@ input,select{font-family:inherit}
     対応形式: <b>XYZ / CSV / TXT / PTS</b>(テキスト) ・ <b>LAS</b> ・ <b>PLY</b><br>
     Scaniverse等のiPhoneスキャンアプリのPLYもOK<br>
     ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。<br>
-    バージョン 2026-10-01c
+    バージョン 2026-10-01d
   </div>
 </div>
 
@@ -2536,8 +2536,9 @@ function densityCheck(){
    レイヤ名は文字化け防止のため英数字
    ========================================================= */
 class DxfWriter{
-  constructor(unitFactor){
+  constructor(unitFactor, scale=0){
     this.f = unitFactor;           // m→1, mm→1000
+    this.scale = scale;            // 縮尺の分母(100 → 1/100)。0 なら用紙範囲を書かない
     this.layers = new Map();
     this.out = [];
   }
@@ -2575,6 +2576,28 @@ class DxfWriter{
     const sj = cadSjis();
     g(0,'SECTION'); g(2,'HEADER'); g(9,'$ACADVER'); g(1,'AC1009');
     if(sj){ g(9,'$DWGCODEPAGE'); g(3,'ANSI_932'); }
+    // 図形の範囲と用紙の範囲(CAD側で用紙・縮尺を合わせる手がかり)
+    let x0=Infinity, y0=Infinity, x1=-Infinity, y1=-Infinity, ent='';
+    for(let i=0;i<this.out.length;i+=2){
+      const c = this.out[i];
+      if(c === '0'){ ent = this.out[i+1]; continue; }
+      if(ent === 'POLYLINE' || ent === 'SEQEND') continue;
+      if(c === '10' || c === '11' || c === '12' || c === '13'){ const v = +this.out[i+1]; if(v<x0) x0=v; if(v>x1) x1=v; }
+      else if(c === '20' || c === '21' || c === '22' || c === '23'){ const v = +this.out[i+1]; if(v<y0) y0=v; if(v>y1) y1=v; }
+    }
+    if(x0 <= x1 && y0 <= y1){
+      const xy = (name, x, y) => { g(9,name); g(10,x.toFixed(4)); g(20,y.toFixed(4)); };
+      g(9,'$EXTMIN'); g(10,x0.toFixed(4)); g(20,y0.toFixed(4)); g(30,'0.0');
+      g(9,'$EXTMAX'); g(10,x1.toFixed(4)); g(20,y1.toFixed(4)); g(30,'0.0');
+      if(this.scale > 0){
+        // 図形が入る一番小さい用紙(横置き・余白10mm)を、図形の中心に置く
+        const k = this.scale/1000*this.f;   // 紙面1mm あたりの図面単位
+        const papers = [[297,210],[420,297],[594,420],[841,594],[1189,841]];
+        const pp = papers.find(q => (q[0]-20)*k >= x1-x0 && (q[1]-20)*k >= y1-y0) || papers[papers.length-1];
+        const cx = (x0+x1)/2, cy = (y0+y1)/2, w = pp[0]*k, hh = pp[1]*k;
+        xy('$LIMMIN', cx-w/2, cy-hh/2); xy('$LIMMAX', cx+w/2, cy+hh/2);
+      }
+    }
     g(0,'ENDSEC');
     g(0,'SECTION'); g(2,'TABLES');
     g(0,'TABLE'); g(2,'LTYPE'); g(70,1);
@@ -2702,7 +2725,7 @@ function exportPlanDXF(){
   const spot = parseFloat($('planSpot').value);
   const th = cadTextH('planScale');
   const o = globalOffset;
-  const dxf = new DxfWriter(cadUnitFactor());
+  const dxf = new DxfWriter(cadUnitFactor(), parseFloat($('planScale').value));
   const L_MINOR = dxf.layer(LN('主曲線','CONTOUR_MINOR'), 3);
   const L_MAJOR = dxf.layer(LN('計曲線','CONTOUR_MAJOR'), 1);
   const L_LABEL = dxf.layer(LN('等高線文字','CONTOUR_LABEL'), 1);
@@ -2865,7 +2888,7 @@ function exportSectionDXF(){
   if(samples.length < 5) return {error:'断面線の近くに点がありません'};
   const design = designLinesAlong(t => frameAt(info, t), 0, L);
   const a = picked[0], b = picked[picked.length-1];
-  const dxf = new DxfWriter(cadUnitFactor());
+  const dxf = new DxfWriter(cadUnitFactor(), parseFloat($('secScale').value));
   const Ly = sectionLayers(dxf);
   const th = cadTextH('secScale');
   const o = globalOffset;
@@ -2886,7 +2909,7 @@ function exportCrossSectionsDXF(){
   const info = polyInfo(picked), Lc = info.total;
   const nSt = Math.floor(Lc/pitch + 1e-9) + 1;
   const grid = buildGridIndex(Math.max(W, 1));
-  const dxf = new DxfWriter(cadUnitFactor());
+  const dxf = new DxfWriter(cadUnitFactor(), parseFloat($('secScale').value));
   const Ly = sectionLayers(dxf);
   const th = cadTextH('secScale');
   const J = cadSjis();
@@ -3261,8 +3284,8 @@ function exportProfileDXF(){
   const scale = parseFloat($('lpScale').value);
   const th = 2.5 * scale / 1000;
   const o = globalOffset, J = cadSjis();
-  const dxf = new DxfWriter(cadUnitFactor());
-  const LG = dxf.layer(LN('地盤線','GROUND_LINE'), 3);
+  const dxf = new DxfWriter(cadUnitFactor(), scale);
+  const LG =dxf.layer(LN('地盤線','GROUND_LINE'), 3);
   const LD = dxf.layer(LN('基準線','DATUM'), 7);
   const LS = dxf.layer(LN('測点線','STATION_LINE'), 8);
   const LI = dxf.layer(LN('IP','IP'), 1);
@@ -3760,7 +3783,7 @@ function writeTraces(dxf, use3d){
 }
 function exportTraceDXF(){
   if(!traces.length) return {error:'作図がありません'};
-  const dxf = new DxfWriter(cadUnitFactor());
+  const dxf = new DxfWriter(cadUnitFactor(), parseFloat($('planScale').value));
   const n = writeTraces(dxf, $('trace3d').checked);
   return {blob: dxf.toBlob(), msg: `${n} 個`};
 }
