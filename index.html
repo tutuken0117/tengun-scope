@@ -460,7 +460,7 @@ input,select{font-family:inherit}
 <div class="panel" id="panel-edit">
   <h3>✂️ 不要な点の除去</h3>
   <div class="secTitle">① 範囲を囲んで除去(手動)</div>
-  <p class="hint">画面上で範囲を囲むと、その中の点を選択します。「範囲を描く」を押すと、真上から全体が見える視点に切り替わります。囲んでいる途中もドラッグで移動、ホイールで拡大縮小できます。</p>
+  <p class="hint">画面上で範囲を囲むと、その中の点を選択します。「範囲を描く」を押すと、真上から全体が見える視点に切り替わります。1点目を打つ前なら、ドラッグや左の視点ボタン(正面・横など)で向きを自由に変えられます。削除したあとは、そのままの向きで続けて囲めます(終わるときは「やめる」)。</p>
   <label class="chkRow" style="margin-top:6px"><input type="checkbox" id="polyTop" checked> 真上・全体表示に切り替えてから囲む(横から囲みたい時は外す)</label>
   <div class="btnRow" id="polyStartRow"><button class="btn" id="polyStartBtn">✏️ 範囲を描く</button></div>
   <div id="polyDrawRow" style="display:none">
@@ -649,6 +649,9 @@ input,select{font-family:inherit}
     <div class="row"><label>使う点</label>
       <select id="tinMethod"><option value="center">格子の中心に近い点</option><option value="lowest">一番低い点(草が残る時)</option></select></div>
     <div class="row"><label>長い三角形を除く</label><input type="number" id="tinMaxEdge" value="3" step="0.5" min="0.5"> <span style="font-size:12px">m 以上</span></div>
+    <div class="row"><label>外れた点を除く</label>
+      <select id="tinOutlier"><option value="0">しない</option><option value="0.1">周りと 0.1 m 以上ちがう点</option><option value="0.2">周りと 0.2 m 以上ちがう点</option><option value="0.3" selected>周りと 0.3 m 以上ちがう点</option><option value="0.5">周りと 0.5 m 以上ちがう点</option><option value="1">周りと 1 m 以上ちがう点</option></select></div>
+    <p class="hint" style="margin-top:6px">消し残った建物・重機の点や、地面の下に落ちた点を自動で除いてから面を貼ります。必要な段差まで消える時は値を大きくするか「しない」にしてください。点群そのものは消しません。</p>
     <div class="row"><label>TINの名前</label><input type="text" id="tinName" value="現況地形"></div>
     <button class="btn full" id="tinBuildBtn">🔺 現況TINを作る</button>
     <p class="hint" id="tinExInfo" style="margin-top:8px"></p>
@@ -795,7 +798,7 @@ input,select{font-family:inherit}
     対応形式: <b>XYZ / CSV / TXT / PTS</b>(テキスト) ・ <b>LAS</b> ・ <b>PLY</b><br>
     Scaniverse等のiPhoneスキャンアプリのPLYもOK<br>
     ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。<br>
-    バージョン 2026-10-01i
+    バージョン 2026-10-01j
   </div>
 </div>
 
@@ -1818,7 +1821,12 @@ function globalGround(){
 
 function setView(name, animate=true){
   if(!cloudBox || !positions) return;
-  if(poly){ toast('範囲を描いている間は視点を切り替えられません(Esc でやめる)'); return; }
+  if(poly){
+    // 範囲を描いている途中で視点を変えたら、打った点を消して囲み直す
+    if(poly.pts.length){ poly.pts = []; toast('視点を変えたので、もう一度囲んでください'); updateEditUI(); }
+    controls.lockRotate = false;
+    animate = false;
+  }
   const b = cloudBox;
   const cx = (b.minX+b.maxX)/2, cy = (b.minY+b.maxY)/2, cz = (b.minZ+b.maxZ)/2;
   const halfX = (b.maxX-b.minX)/2, halfY = (b.maxY-b.minY)/2;
@@ -2025,17 +2033,15 @@ let poly = null;          // {pts:[[sx,sy],...]}
 let selMask = null, selCount = 0;
 let lastMouse = null;
 
-function startPolygon(){
+// keepView=true: 今の視点のまま続けて囲む(削除のあとなど)
+function startPolygon(keepView){
   if(!positions) return;
   cancelSelection();
   // 真上・全体が見える引きの視点にしてから囲む
-  if($('polyTop').checked){ setView('top', false); controls.update(); }
-  const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
-  // 頂点は「画面に平行な平面」上の3D位置で覚える → 拡大・移動してもずれない
-  poly = {pts:[], plane: new THREE.Plane().setFromNormalAndCoplanarPoint(dir, controls.target.clone())};
-  controls.lockRotate = true;
-  setGuide('✏️ クリックで囲む(ドラッグ=移動・ホイール=拡大縮小)→ 最初の点・右クリック・Enter で確定');
+  if(keepView !== true && $('polyTop').checked){ setView('top', false); controls.update(); }
+  // 1点目を打つまでは視点を自由に変えられる(平面は1点目で決める)
+  poly = {pts:[], plane:null};
+  setGuide('✏️ 向きを決めてクリックで囲む → 最初の点・右クリック・Enter で確定(1点目の前はドラッグで回転、打った後はドラッグ=移動)');
   updateEditUI();
 }
 function screenToPlane(x, y){
@@ -2053,9 +2059,17 @@ function addPolyVertex(x, y){
     const [fx, fy] = toScreen(poly.pts[0]);
     if(Math.hypot(x-fx, y-fy) < 12){ closePolygon(); return; }
   }
+  if(!poly.pts.length){
+    // 頂点は「画面に平行な平面」上の3D位置で覚える → 拡大・移動してもずれない
+    controls.update();
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    poly.plane = new THREE.Plane().setFromNormalAndCoplanarPoint(dir, controls.target.clone());
+  }
   const w = screenToPlane(x, y);
   if(!w) return;
   poly.pts.push(w);
+  controls.lockRotate = true;
   updateEditUI();
 }
 function closePolygon(){
@@ -2068,7 +2082,7 @@ function closePolygon(){
   const r = computeSelection(pts);
   if(r.cnt === 0){
     selMask = null; toast('囲んだ範囲に点がありませんでした');
-    updateEditUI(); return;
+    startPolygon(true); return;
   }
   selMask = r.mask; selCount = r.cnt;
   highlightSelection();
@@ -2121,7 +2135,8 @@ function updateEditUI(){
   const drawing = !!poly;
   $('polyStartRow').style.display = (drawing || selMask) ? 'none' : '';
   $('polyDrawRow').style.display = drawing ? '' : 'none';
-  $('polyCount').textContent = drawing ? `頂点 ${poly.pts.length} 個` : '';
+  $('polyCount').textContent = !drawing ? '' : poly.pts.length ? `頂点 ${poly.pts.length} 個(視点ボタンを押すと囲み直しになります)`
+    : '囲む準備ができました。ドラッグや左の視点ボタンで向きを決めて、1点目をクリックしてください。';
   $('selRow').style.display = selMask ? '' : 'none';
   if(selMask) $('selInfo').innerHTML = `赤色の <b>${fmtInt(selCount)}</b> 点を選択中(奥にある点も含みます)`;
 }
@@ -2131,14 +2146,14 @@ function deleteSelection(){
   for(let i=0;i<n;i++) keep[i] = selMask[i] ? 0 : 1;
   selMask = null;
   if(!applyKeep(keep, '範囲削除')) applyColors();
-  updateEditUI();
+  if(mode === 'edit') startPolygon(true); else updateEditUI();   // 続けて囲めるようにする
 }
 function keepSelection(){
   if(!selMask) return;
   const keep = selMask;
   selMask = null;
   if(!applyKeep(keep, '範囲の切り抜き')) applyColors();
-  updateEditUI();
+  if(mode === 'edit') startPolygon(true); else updateEditUI();
 }
 
 /* =========================================================
@@ -4231,8 +4246,11 @@ let designSurfaces = [];   // 読み込んだLandXML内のサーフェス一覧
 function buildTinFromCloud(){
   const cell = parseFloat($('tinCell').value), method = $('tinMethod').value;
   const keep = thinGrid(cell, method);
-  const idx = [];
+  let idx = [];
   for(let i=0;i<keep.length;i++) if(keep[i]) idx.push(i);
+  const n0 = idx.length, tol = parseFloat($('tinOutlier').value);
+  if(tol > 0) idx = tinOutlierFilter(idx, cell, tol);
+  const removed = n0 - idx.length;
   if(idx.length < 3) throw new Error('点が少なすぎます');
   if(idx.length > 1500000) throw new Error('点が多すぎます。格子を大きくしてください');
   const o = globalOffset, n = idx.length;
@@ -4251,7 +4269,46 @@ function buildTinFromCloud(){
     if(e(a,b) > m2 || e(b,c) > m2 || e(c,a) > m2) continue;
     out.push(a, b, c);
   }
-  return {pts, tri: Uint32Array.from(out), name: $('tinName').value || '現況地形'};
+  return {pts, tri: Uint32Array.from(out), name: $('tinName').value || '現況地形', removed};
+}
+// 周りの高さから大きく外れた点を除く(消し残った建物・重機、地面の下のノイズ)
+// 点をはさんで向かい合う2点の平均と比べるので、一様な斜面やデータの端では除かれない
+// (端の近くで向かい合う2点が3組そろわない点は、判定せずに残す)
+function tinOutlierFilter(idx, cell, tol){
+  const b = cloudBox;
+  const nx = Math.floor((b.maxX-b.minX)/cell) + 1, ny = Math.floor((b.maxY-b.minY)/cell) + 1;
+  if(nx*ny > 4e7) return idx;
+  const grid = new Int32Array(nx*ny).fill(-1);
+  const cx = new Int32Array(idx.length), cy = new Int32Array(idx.length);
+  idx.forEach((i, k) => {
+    cx[k] = Math.floor((positions[i*3]-b.minX)/cell); cy[k] = Math.floor((positions[i*3+1]-b.minY)/cell);
+    grid[cx[k]*ny + cy[k]] = i;
+  });
+  const half = [];   // 5×5 マスの半分(残り半分は点対称の相手)
+  for(let dx=-2;dx<=2;dx++) for(let dy=-2;dy<=2;dy++) if(dx > 0 || (dx === 0 && dy > 0)) half.push([dx, dy]);
+  const alive = new Uint8Array(idx.length).fill(1), av = new Float64Array(half.length);
+  // 法肩・法尻・溝の底などの折れ線は、線に沿った向きの2点とは高さが合うので残る。
+  // どの向きとも合わない点だけを除き、かたまりは外側から順に削る(繰り返し)
+  for(let pass=0; pass<4; pass++){
+    const drop = [];
+    for(let k=0;k<idx.length;k++){
+      if(!alive[k]) continue;
+      const z = positions[idx[k]*3+2];
+      let m = 0;
+      for(const [dx, dy] of half){
+        const ax = cx[k]+dx, ay = cy[k]+dy, bx = cx[k]-dx, by = cy[k]-dy;
+        if(ax >= nx || ay < 0 || ay >= ny || bx < 0 || by < 0 || by >= ny) continue;
+        const p = grid[ax*ny+ay], q = grid[bx*ny+by];
+        if(p >= 0 && q >= 0) av[m++] = Math.abs(z - (positions[p*3+2] + positions[q*3+2]) / 2);
+      }
+      if(m < 3) continue;
+      const s = av.subarray(0, m).sort();
+      if(s[1] > tol) drop.push(k);   // 2番目に合う向きでも合わない
+    }
+    if(!drop.length) break;
+    for(const k of drop){ alive[k] = 0; grid[cx[k]*ny + cy[k]] = -1; }
+  }
+  return idx.filter((_, k) => alive[k]);
 }
 function tinArea(tin){
   const p = tin.pts, T = tin.tri; let s = 0;
@@ -4378,7 +4435,8 @@ function refreshTinMeshes(){
 function updateTinUI(){
   if(!$('tinExInfo')) return;
   $('tinExInfo').innerHTML = tinEx
-    ? `✅ ${esc(tinEx.name)}:点 ${fmtInt(tinEx.pts.length/3)}・三角形 ${fmtInt(tinEx.tri.length/3)}・面積 ${fmt(tinArea(tinEx),1)} m²`
+    ? `✅ ${esc(tinEx.name)}:点 ${fmtInt(tinEx.pts.length/3)}・三角形 ${fmtInt(tinEx.tri.length/3)}・面積 ${fmt(tinArea(tinEx),1)} m²` +
+      (tinEx.removed ? `<br>周りから外れた点を <b>${fmtInt(tinEx.removed)}</b> 個除きました` : '')
     : 'まだ作成していません。';
   $('tinDsInfo').innerHTML = tinDs
     ? `✅ ${esc(tinDs.name)}:点 ${fmtInt(tinDs.pts.length/3)}・三角形 ${fmtInt(tinDs.tri.length/3)}・面積 ${fmt(tinArea(tinDs),1)} m²`
