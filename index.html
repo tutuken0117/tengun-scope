@@ -86,6 +86,19 @@ input,select{font-family:inherit}
 .viewBtn .ic{font-size:16px;line-height:1.1}
 .viewBtn.active{background:var(--accent-soft);color:var(--accent)}
 .viewBtn:active{opacity:.7}
+/* 色の切替(見た目はボタン、中身は透明なセレクト) */
+.colorBtn{
+  position:relative;width:48px;padding:6px 0;border-radius:10px;margin-top:3px;
+  display:flex;flex-direction:column;align-items:center;gap:1px;
+  font-size:10px;font-weight:700;color:var(--text-dim);
+  border-top:1px solid rgba(255,255,255,.1);
+}
+.colorBtn .ic{font-size:16px;line-height:1.1}
+.colorBtn select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:16px}
+.colorBtn select option{background:#181d24;color:#e8ecf1}
+/* パネルを閉じるボタン */
+.panelClose{margin-left:auto;width:28px;height:28px;border-radius:8px;font-size:14px;color:var(--text-dim);flex-shrink:0}
+.panelClose:hover{background:rgba(255,255,255,.1);color:var(--text)}
 
 /* ===== オーバーレイ ===== */
 #overlay{position:fixed;inset:0;width:100%;height:100%;z-index:5;pointer-events:none}
@@ -291,6 +304,7 @@ input,select{font-family:inherit}
   <div id="statusChip" style="display:none"></div>
   <div class="spacer"></div>
   <button class="iconBtn" id="undoBtn" title="元に戻す" disabled>↩️</button>
+  <button class="iconBtn" id="redoBtn" title="進む(やり直す)" disabled>↪️</button>
   <button class="iconBtn" id="openFileBtn" title="ファイルを開く">📂</button>
   <button class="iconBtn" id="helpBtn" title="使い方">❓</button>
 </div>
@@ -304,6 +318,15 @@ input,select{font-family:inherit}
   <button class="viewBtn" data-view="front"><span class="ic">⬆️</span>正面</button>
   <button class="viewBtn" data-view="side"><span class="ic">➡️</span>横</button>
   <button class="viewBtn" data-view="oblique"><span class="ic">↘️</span>斜め</button>
+  <label class="colorBtn" title="点群の色を切り替える"><span class="ic">🎨</span>色
+    <select id="quickColor">
+      <option value="rgb">元の色(RGB)</option>
+      <option value="height">高さで色分け</option>
+      <option value="single">単色</option>
+      <option value="hag">地面からの高さ</option>
+      <option value="slope">段差・勾配を強調</option>
+    </select>
+  </label>
 </div>
 
 <!-- ツールバー -->
@@ -485,7 +508,7 @@ input,select{font-family:inherit}
     <button class="btn full ghost" id="thinBtn">間引く</button>
   </div>
 
-  <div class="btnRow"><button class="btn ghost" id="undoBtn2" disabled>↩️ 元に戻す(Ctrl+Z)</button></div>
+  <div class="btnRow"><button class="btn ghost" id="undoBtn2" disabled>↩️ 元に戻す(Ctrl+Z)</button><button class="btn ghost" id="redoBtn2" disabled>↪️ 進む(Ctrl+Y)</button></div>
 </div>
 
 <!-- 座標パネル -->
@@ -548,7 +571,7 @@ input,select{font-family:inherit}
     <div class="secTitle">作図の一覧 <span id="traceCount"></span></div>
     <button class="btn ghost full" id="traceRestoreBtn" style="display:none"></button>
     <div id="traceList" class="trList"></div>
-    <div class="btnRow"><button class="btn ghost" id="trUndoBtn">↩️ 作図を元に戻す(Ctrl+Z)</button></div>
+    <div class="btnRow"><button class="btn ghost" id="trUndoBtn">↩️ 元に戻す(Ctrl+Z)</button><button class="btn ghost" id="trRedoBtn">↪️ 進む(Ctrl+Y)</button></div>
   </div>
 
   <div class="sec">
@@ -771,7 +794,7 @@ input,select{font-family:inherit}
     対応形式: <b>XYZ / CSV / TXT / PTS</b>(テキスト) ・ <b>LAS</b> ・ <b>PLY</b><br>
     Scaniverse等のiPhoneスキャンアプリのPLYもOK<br>
     ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。<br>
-    バージョン 2026-10-01f
+    バージョン 2026-10-01g
   </div>
 </div>
 
@@ -794,12 +817,12 @@ input,select{font-family:inherit}
     <div class="helpItem"><div class="ic">✏️</div><div><b>作図(現況構造物)</b><p>道路端・側溝・擁壁・建物・電柱などを点群の上からなぞって描きます。真上の平行投影で表示され、「段差・勾配を強調」の色で縁石や法肩の線が見やすくなります。Enter=確定 / C=閉じる / Shift=直角 / Ctrl+Z=元に戻す。</p></div></div>
     <div class="helpItem"><div class="ic">📐</div><div><b>図面(CAD出力)</b><p>「📐図面」で等高線・標高点の平面図、「⛰️断面」で線を引いて断面図・連続横断図・縦断図をDXFで出力。曲がった道路は「線の引き方」を「中心線(折れ線)」にします。</p></div></div>
     <div class="helpItem"><div class="ic">💾</div><div><b>出力モード</b><p>編集した点群をLAS・CSV・TXTで保存します。点密度チェックもここ。</p></div></div>
-    <div class="helpItem"><div class="ic">⌨️</div><div><b>キーボード(PC)</b><p>Ctrl+Z=元に戻す / Enter=範囲を確定 / Esc=やめる / Delete=選んだ点を削除</p></div></div>
+    <div class="helpItem"><div class="ic">⌨️</div><div><b>キーボード(PC)</b><p>Ctrl+Z=元に戻す / Ctrl+Y=進む / Enter=範囲を確定 / Esc=やめる / Delete=選んだ点を削除</p></div></div>
     <div class="helpItem"><div class="ic">📏</div><div><b>距離モード</b><p>点群の上を2か所タップすると、斜距離・水平距離・高低差が出ます。</p></div></div>
     <div class="helpItem"><div class="ic">⛰️</div><div><b>断面モード</b><p>2か所タップして線を引くと、その線に沿った断面図(横から見た形)が出ます。</p></div></div>
     <div class="helpItem"><div class="ic">🧮</div><div><b>土量モード</b><p>基準の高さ(計画高)より上を切土、下を盛土として計算します。範囲を囲み、切土・盛土の法面勾配(1割5分など)を指定すると、法面の土量も含めて計算します。</p></div></div>
     <div class="helpItem"><div class="ic">🔄</div><div><b>向きがおかしい時</b><p>⚙️設定 → 寝そべって見えたら「横倒しを起こす」、逆さまなら「上下を反転」。</p></div></div>
-    <div class="helpItem"><div class="ic">💡</div><div><b>コツ</b><p>測定モード中でもドラッグで視点は動かせます。タップ(すぐ離す)で点を選択します。</p></div></div>
+    <div class="helpItem"><div class="ic">💡</div><div><b>コツ</b><p>測定モード中でもドラッグで視点は動かせます。タップ(すぐ離す)で点を選択します。<br>小窓は、枠の外をクリックするか右上の ✕ で閉じます。下のメニューをもう一度押すと開きます。<br>点群の色は、画面左の「🎨色」でいつでも切り替えられます。</p></div></div>
     <button class="btn full" id="helpCloseBtn">閉じる</button>
   </div>
 </div>
@@ -1471,6 +1494,8 @@ function pickPoint(clientX, clientY){
   const i = best.index;
   return new THREE.Vector3(positions[i*3], positions[i*3+1], positions[i*3+2]);
 }
+// 小窓(パネル)を閉じる。モードはそのまま。下のメニューをもう一度押すと開く
+function closePanel(){ document.querySelectorAll('.panel.open').forEach(p => p.classList.remove('open')); }
 function onTap(clientX, clientY, btn=0){
   if(!pointsObj) return;
   if(mode === 'edit' && poly){
@@ -1490,6 +1515,11 @@ function onTap(clientX, clientY, btn=0){
     return;
   }
   if(btn !== 0) return;
+  // 点を選ぶ操作の途中でなければ、枠外のクリックで小窓を閉じる
+  if(!(mode === 'volume' && volPick) && !(mode === 'coord' && coordPickMode) && mode !== 'dist' && mode !== 'section'){
+    closePanel();
+    return;
+  }
   if(mode === 'volume' && volPick){
     const p = pickPoint(clientX, clientY);
     if(!p) return;
@@ -1812,7 +1842,7 @@ function setView(name, animate=true){
 /* =========================================================
    編集の共通処理(再構築・元に戻す)
    ========================================================= */
-let undoStack = [];
+let undoStack = [], redoStack = [];
 const UNDO_MAX = isMobile ? 2 : 5;
 let loadedFileName = 'pointcloud';
 
@@ -1879,38 +1909,61 @@ function replaceCloud(np, nc){
   updateBasePlane();
 }
 
-function pushUndo(label, inv=null){
-  undoStack.push({
-    label, inv,
+// inv / fwd: 作図などの座標を、操作の前 / 後の座標へ移す関数(座標が変わる操作だけ)
+function snapState(label, inv, fwd){
+  return {
+    label, inv, fwd,
     positions: positions.slice(),
     colors: rgbColors ? rgbColors.slice() : null,
     offset: {...globalOffset},
     gcps: JSON.parse(JSON.stringify(gcps)),
     upAxis: currentUpAxis
-  });
-  if(undoStack.length > UNDO_MAX) undoStack.shift();
-  updateUndoBtn();
+  };
 }
-function undo(){
-  const s = undoStack.pop();
-  if(!s){ toast('元に戻せる操作はありません'); return; }
+function restoreState(s, map){
   cancelSelection();
   globalOffset = s.offset;
   gcps = s.gcps;
   currentUpAxis = s.upAxis; $('upAxis').value = s.upAxis;
   lastTransform = null;
   replaceCloud(s.positions, s.colors);
-  if(s.inv) mapTraces(s.inv);
-  if(s.label === '点群をつなぐ'){ mergeHistory.pop(); renderMergeHistory(); }
+  if(map) mapTraces(map);
   renderGcpList();
+}
+function pushUndo(label, inv=null, fwd=null){
+  undoStack.push(snapState(label, inv, fwd));
+  if(undoStack.length > UNDO_MAX) undoStack.shift();
+  redoStack = [];
+  updateUndoBtn();
+}
+function undo(){
+  const s = undoStack.pop();
+  if(!s){ toast('元に戻せる操作はありません'); return; }
+  const r = snapState(s.label, s.inv, s.fwd);
+  if(s.label === '点群をつなぐ'){ r.merge = mergeHistory.pop(); renderMergeHistory(); }
+  redoStack.push(r);
+  restoreState(s, s.inv);
   toast(`「${s.label}」を取り消しました ↩️`);
 }
+function redo(){
+  const r = redoStack.pop();
+  if(!r){ toast('進める操作はありません'); return; }
+  undoStack.push(snapState(r.label, r.inv, r.fwd));
+  restoreState(r, r.fwd);
+  if(r.merge){ mergeHistory.push(r.merge); renderMergeHistory(); }
+  toast(`「${r.label}」をやり直しました ↪️`);
+}
 function updateUndoBtn(){
-  const has = undoStack.length > 0;
+  const has = undoStack.length > 0, hasR = redoStack.length > 0;
   ['undoBtn','undoBtn2'].forEach(id => {
     const b = $(id); if(!b) return;
     b.disabled = !has;
     b.title = has ? `元に戻す: ${undoStack[undoStack.length-1].label}` : '元に戻す';
+  });
+  ['redoBtn','redoBtn2'].forEach(id => {
+    const b = $(id); if(!b) return;
+    b.disabled = !hasR;
+    b.title = hasR ? `進む: ${redoStack[redoStack.length-1].label}` : '進む(やり直す)';
   });
 }
 function resetEditState(){
@@ -1919,7 +1972,7 @@ function resetEditState(){
   traces = []; traceCur = null; traceUndoStack = [];
   rebuildTraceScene(); renderTraceList(); checkTraceRestore();
   resetClip();
-  undoStack = []; gcps = []; lastTransform = null;
+  undoStack = []; redoStack = []; traceRedoStack = []; gcps = []; lastTransform = null;
   poly = null; selMask = null; coordPickMode = null; probePoint = null;
   if(controls) controls.locked = false;
   updateUndoBtn(); renderGcpList(); updateEditUI();
@@ -2381,7 +2434,7 @@ function calcGcp(){
 function applyGcp(){
   if(!lastTransform){ toast('先に「計算する」を押してください'); return; }
   const T = lastTransform;
-  pushUndo('座標の割付', p => applyTInv(T, p));
+  pushUndo('座標の割付', p => applyTInv(T, p), p => applyT(T, p));
   const {R, s} = T, n = positions.length/3;
   const M = R.map(r => r.map(v => v*s));
   for(let i=0;i<n;i++){
@@ -2408,7 +2461,8 @@ function applyGcp(){
 
 function swapXY(){
   if(!positions) return;
-  pushUndo('X・Y入れ替え', p => ({x:p.y, y:p.x, z:p.z}));
+  const sw = p => ({x:p.y, y:p.x, z:p.z});
+  pushUndo('X・Y入れ替え', sw, sw);
   const n = positions.length/3;
   for(let i=0;i<n;i++){ const x=positions[i*3]; positions[i*3]=positions[i*3+1]; positions[i*3+1]=x; }
   const ox = globalOffset.x; globalOffset.x = globalOffset.y; globalOffset.y = ox;
@@ -3420,7 +3474,7 @@ let traceColorInit = false;
 let traces = [];            // {type, pts:[{x,y,z}], closed}
 let traceCur = null;        // 描いている途中
 let traceType = 'road';
-let traceUndoStack = [];
+let traceUndoStack = [], traceRedoStack = [];
 let traceGroup = null;
 let shiftDown = false;
 let useOrtho = false, perspCam = null, orthoCam = null;
@@ -3548,6 +3602,7 @@ function colorAssist(modeC, arr){
 function pushTraceUndo(){
   traceUndoStack.push(JSON.stringify(traces));
   if(traceUndoStack.length > 100) traceUndoStack.shift();
+  traceRedoStack = [];
 }
 function snapVertex(x, y){
   let best = null, bd = 10;
@@ -3636,6 +3691,14 @@ function traceUndo(){
   }
   const s = traceUndoStack.pop();
   if(s === undefined){ toast('元に戻せる作図はありません'); return; }
+  traceRedoStack.push(JSON.stringify(traces));
+  traces = JSON.parse(s);
+  traceChanged();
+}
+function traceRedo(){
+  const s = traceRedoStack.pop();
+  if(s === undefined){ toast('進める作図はありません'); return; }
+  traceUndoStack.push(JSON.stringify(traces));
   traces = JSON.parse(s);
   traceChanged();
 }
@@ -3653,7 +3716,8 @@ function mapTraces(fn){
   }
   for(const f of traces) f.pts = f.pts.map(fn);
   if(traceCur) traceCur.pts = traceCur.pts.map(fn);
-  traceUndoStack = traceUndoStack.map(s => JSON.stringify(JSON.parse(s).map(f => ({...f, pts:f.pts.map(fn)}))));
+  const mapStack = st => st.map(s => JSON.stringify(JSON.parse(s).map(f => ({...f, pts:f.pts.map(fn)}))));
+  traceUndoStack = mapStack(traceUndoStack); traceRedoStack = mapStack(traceRedoStack);
   traceChanged();
 }
 
@@ -4995,8 +5059,28 @@ function setMode(m){
 
 function wireUI(){
   document.querySelectorAll('.modeBtn').forEach(b => {
-    b.addEventListener('click', ()=> setMode(b.dataset.mode));
+    b.addEventListener('click', ()=>{
+      // 同じメニューをもう一度押すと、小窓を開け閉めする
+      const panel = $('panel-'+b.dataset.mode);
+      if(b.dataset.mode === mode && panel) panel.classList.toggle('open');
+      else setMode(b.dataset.mode);
+    });
   });
+  document.querySelectorAll('.panel > h3').forEach(h => {
+    const x = document.createElement('button');
+    x.className = 'panelClose'; x.textContent = '✕'; x.title = '閉じる(下のメニューをもう一度押すと開きます)';
+    x.addEventListener('click', closePanel);
+    h.appendChild(x);
+  });
+  $('quickColor').addEventListener('pointerdown', ()=>{ $('quickColor').value = $('colorMode').value; });
+  $('quickColor').addEventListener('change', ()=>{
+    $('colorMode').value = $('quickColor').value;
+    $('colorMode').dispatchEvent(new Event('change'));
+    $('quickColor').value = $('colorMode').value;
+  });
+  $('redoBtn').addEventListener('click', redo);
+  $('redoBtn2').addEventListener('click', redo);
+  $('trRedoBtn').addEventListener('click', traceRedo);
 
   $('pickFileBtn').addEventListener('click', ()=> $('fileInput').click());
   $('openFileBtn').addEventListener('click', ()=> $('fileInput').click());
@@ -5244,6 +5328,11 @@ function wireUI(){
     if(e.key === 'Shift') shiftDown = true;
     const tag = (e.target.tagName || '').toLowerCase();
     const typing = tag === 'input' || tag === 'select' || tag === 'textarea';
+    if((e.ctrlKey || e.metaKey) && !typing && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))){
+      e.preventDefault();
+      if(mode === 'trace') traceRedo(); else redo();
+      return;
+    }
     if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !typing){
       e.preventDefault();
       if(mode === 'trace') traceUndo(); else undo();
