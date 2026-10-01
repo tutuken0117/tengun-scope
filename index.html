@@ -3849,6 +3849,9 @@ function distPolyXY(x, y, P){
   return Math.sqrt(d);
 }
 
+// 頂点の画面位置(クリックした点の高さで描く。基準の高さで描くと遠近でずれて見える)
+function volScr(p){ return toScreen(new THREE.Vector3(p.x-globalOffset.x, p.y-globalOffset.y, p.z ?? volBaseLocal())); }
+
 /* --- 範囲を描く --- */
 function startVolPoly(){
   if(!positions) return;
@@ -3866,12 +3869,12 @@ function addVolVertex(x, y){
   if(!volDrawing) return;
   if(volPoly.pts.length >= 3){
     const f = volPoly.pts[0];
-    const s = toScreen(new THREE.Vector3(f.x-globalOffset.x, f.y-globalOffset.y, volBaseLocal()));
+    const s = volScr(f);
     if(Math.hypot(x-s[0], y-s[1]) < 12){ closeVolPoly(); return; }
   }
   const lp = pickQuiet(x, y) || hitAtZ(x, y, volBaseLocal());
   if(!lp) return;
-  volPoly.pts.push({x: lp.x+globalOffset.x, y: lp.y+globalOffset.y});
+  volPoly.pts.push({x: lp.x+globalOffset.x, y: lp.y+globalOffset.y, z: lp.z});
   updateVolUI();
 }
 function closeVolPoly(){
@@ -3901,49 +3904,48 @@ function updateVolUI(){
   $('volPolyClear').style.display = closed ? '' : 'none';
   $('volDrawRow').style.display = volDrawing ? '' : 'none';
   $('volPolyInfo').innerHTML = volDrawing ? `頂点 ${volPoly.pts.length} 個`
-    : closed ? `✅ 範囲:頂点 ${volPoly.pts.length} 個・面積 <b>${fmt(polyAreaXY(volPoly.pts),1)} m²</b>(角の点・線はドラッグで動かせます)`
+    : closed ? `✅ 範囲:頂点 ${volPoly.pts.length} 個・面積 <b>${fmt(polyAreaXY(volPoly.pts),1)} m²</b>(角の丸い点をドラッグすると修正できます)`
     : '範囲を指定しないと、点群全体で計算します(法面なし)。';
   $('volSlopeCut').disabled = $('volSlopeFill').disabled = !closed;
   $('volSlopeSec').style.opacity = closed ? 1 : 0.5;
 }
 
-/* --- 範囲の角・線をドラッグ --- */
+/* --- 範囲の角(丸い点)をドラッグして修正 --- */
 const volDrag = {
   kind: null,
-  scr(){ const z = volBaseLocal(); return volPoly.pts.map(p => toScreen(new THREE.Vector3(p.x-globalOffset.x, p.y-globalOffset.y, z))); },
   hit(x, y, touch){
     if(!volPoly || !volPoly.closed || volDrawing) return null;
-    const s = this.scr(), R = touch ? 26 : 14;
+    const s = volPoly.pts.map(volScr), R = touch ? 26 : 14;
     for(let i=0;i<s.length;i++) if(Math.hypot(x-s[i][0], y-s[i][1]) < R) return i;
-    for(let a=0, b=s.length-1; a<s.length; b=a++) if(distToSeg(x, y, s[b], s[a]) < (touch ? 16 : 9)) return 'all';
     return null;
   },
   start(x, y, touch=false){
     if(mode !== 'volume') return false;
     const k = this.hit(x, y, touch); if(k === null) return false;
     this.kind = k;
-    this.orig = volPoly.pts.map(p => ({...p}));
-    this.h0 = hitAtZ(x, y, volBaseLocal());
+    this.orig = {...volPoly.pts[k]};
+    this.z = this.orig.z ?? volBaseLocal();
+    this.h0 = hitAtZ(x, y, this.z);
     if(!this.h0){ this.kind = null; return false; }
-    renderer.domElement.style.cursor = k === 'all' ? 'move' : 'grabbing';
+    renderer.domElement.style.cursor = 'grabbing';
     return true;
   },
   move(x, y){
     if(this.kind === null) return;
-    const h = hitAtZ(x, y, volBaseLocal()); if(!h) return;
-    const dx = h.x-this.h0.x, dy = h.y-this.h0.y;
-    if(this.kind === 'all') volPoly.pts = this.orig.map(p => ({x:p.x+dx, y:p.y+dy}));
-    else volPoly.pts[this.kind] = {x:this.orig[this.kind].x+dx, y:this.orig[this.kind].y+dy};
+    const h = hitAtZ(x, y, this.z); if(!h) return;
+    volPoly.pts[this.kind] = {x:this.orig.x+h.x-this.h0.x, y:this.orig.y+h.y-this.h0.y, z:this.z};
   },
   end(){
     if(this.kind === null) return;
+    const p = volPoly.pts[this.kind];
+    const q = {x:p.x-globalOffset.x, y:p.y-globalOffset.y, z:p.z};
+    snapToGround(q); p.z = q.z;
     this.kind = null;
     renderer.domElement.style.cursor = '';
     clearVolResult(); updateBasePlane(); updateVolUI();
   },
   hover(x, y){
-    const k = this.hit(x, y, false);
-    renderer.domElement.style.cursor = k === null ? '' : (k === 'all' ? 'move' : 'grab');
+    renderer.domElement.style.cursor = this.hit(x, y, false) === null ? '' : 'grab';
   }
 };
 const dragDispatch = {
@@ -3958,8 +3960,7 @@ const dragDispatch = {
 /* --- 画面表示 --- */
 function drawVolOverlay(ctx){
   if(mode !== 'volume' || !volPoly || !volPoly.pts.length) return;
-  const z = volBaseLocal();
-  const s = volPoly.pts.map(p => toScreen(new THREE.Vector3(p.x-globalOffset.x, p.y-globalOffset.y, z)));
+  const s = volPoly.pts.map(volScr);
   ctx.beginPath(); ctx.moveTo(s[0][0], s[0][1]);
   for(let i=1;i<s.length;i++) ctx.lineTo(s[i][0], s[i][1]);
   if(volDrawing && lastMouse) ctx.lineTo(lastMouse[0], lastMouse[1]);
@@ -3969,7 +3970,8 @@ function drawVolOverlay(ctx){
   ctx.lineWidth = 2.2; ctx.strokeStyle = '#ff8a2a'; ctx.stroke();
   s.forEach((q, i) => {
     ctx.fillStyle = i === 0 && volDrawing ? '#fff' : '#ff8a2a';
-    ctx.beginPath(); ctx.arc(q[0], q[1], i === 0 && volDrawing && s.length >= 3 ? 7 : 4.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(q[0], q[1], (i === 0 && volDrawing && s.length >= 3) || volPoly.closed ? 7 : 4.5, 0, Math.PI*2); ctx.fill();
+    if(volPoly.closed){ ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke(); }
   });
 }
 function clearVolResult(){
