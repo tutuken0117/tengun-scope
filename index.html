@@ -605,7 +605,7 @@ body:not(.showHints) .panel p.hint:not([id]){display:none}
   <details class="sec">
     <summary class="secTitle">保存・出力</summary>
     <label class="chkRow"><input type="checkbox" id="trace3d"> 高さ(Z)を持たせる(3Dの線で出力)</label>
-    <button class="btn full" id="trDxfBtn">📐 作図をDXF出力</button>
+    <button class="btn full" id="trDxfBtn">📐 作図を図面に出力</button>
     <p class="hint" style="margin-top:6px">等高線と一緒に出すときは「📐図面」の平面図から出力します。単位・文字コードは「📐図面」の設定を使います。作図はこのパソコンに自動で一時保存されます。</p>
     <div class="btnRow"><button class="btn ghost" id="trSaveBtn">💾 保存</button><button class="btn ghost" id="trLoadBtn">📂 読込</button></div>
     <input type="file" id="trLoadInput" style="display:none">
@@ -730,8 +730,13 @@ body:not(.showHints) .panel p.hint:not([id]){display:none}
 
 <!-- 図面パネル -->
 <div class="panel" id="panel-cad">
-  <h3>📐 平面図の出力(DXF)</h3>
-  <p class="hint">点群から等高線・標高点・外形線を作り、CADで読めるDXFで保存します。先に「✂️除去 → ④地表面の抽出」で草木を消しておくときれいな等高線になります。</p>
+  <h3>📐 平面図の出力</h3>
+  <p class="hint">点群から等高線・標高点・外形線を作り、CADで読める形式で保存します。先に「✂️除去 → ④地表面の抽出」で草木を消しておくときれいな等高線になります。</p>
+  <div class="row"><label>保存形式</label>
+    <select id="cadFormat"><option value="dxf" selected>DXF</option><option value="sfc">SFC(SXF・用紙と縮尺つき)</option></select></div>
+  <div class="row" id="sfcPolyRow" style="display:none"><label>折れ線</label>
+    <select id="sfcPoly"><option value="poly" selected>折れ線のまま</option><option value="line">線分に分ける(読めない時)</option></select></div>
+  <p class="hint">SFCは用紙サイズと縮尺を持てる形式です。座標は実寸のまま、選んだ縮尺の部分図として用紙の真ん中に置きます。断面図・横断図・縦断図・作図の出力も、ここで選んだ形式になります。SFCは平面の図面なので、等高線や点の高さ(Z)は入りません。</p>
   <div class="row"><label>等高線の間隔</label>
     <select id="planInterval"><option value="0">入れない</option><option value="0.1">0.1 m</option><option value="0.25">0.25 m</option><option value="0.5" selected>0.5 m</option><option value="1">1 m</option><option value="2">2 m</option><option value="5">5 m</option></select></div>
   <div class="row"><label>計算の格子</label>
@@ -837,7 +842,7 @@ body:not(.showHints) .panel p.hint:not([id]){display:none}
     Scaniverse等のiPhoneスキャンアプリのPLYもOK<br>
     ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。<br>
     保存した作業ファイル(.tgscope)もここから開けます。<br>
-    バージョン 2026-10-02g
+    バージョン 2026-10-02h
   </div>
 </div>
 
@@ -2832,6 +2837,96 @@ class DxfWriter{
     return new Blob(chunks, {type:'application/dxf'});
   }
 }
+/* =========================================================
+   SFC(SXF)書き出し — 用紙サイズと縮尺を持てる、日本のCAD向けの形式
+   用紙の上に、縮尺つきの「部分図」を1つ置く。部分図の中の座標は実寸の mm
+   ========================================================= */
+class SfcWriter extends DxfWriter{
+  constructor(scale){
+    super(1000, scale);            // m → mm
+    this.el = [];                  // 図形のフィーチャ
+    this.xs = []; this.ys = [];
+    this.split = $('sfcPoly').value === 'line';   // 折れ線を線分に分けて出すか
+  }
+  lcode(l){ return [...this.layers.keys()].indexOf(l) + 1; }
+  // DXFの色番号 → SXFの既定色(1黒 2赤 3緑 4青 5黄 6マゼンタ 7シアン 11橙 16濃い灰)
+  ccode(l){ return ({1:2, 2:5, 3:3, 4:7, 5:4, 6:6, 7:1, 8:16, 30:11})[this.layers.get(l)] || 1; }
+  mm(v){ return (v*1000).toFixed(3); }
+  mark(x, y){ this.xs.push(x*1000); this.ys.push(y*1000); }
+  head(l){ return `'${this.lcode(l)}','${this.ccode(l)}'`; }
+  point(l, x, y){ this.mark(x, y); this.el.push(`point_marker_feature(${this.head(l)},'${this.mm(x)}','${this.mm(y)}','1','0.0','1.0')`); }
+  line(l, x1, y1, x2, y2){
+    this.mark(x1, y1); this.mark(x2, y2);
+    this.el.push(`line_feature(${this.head(l)},'1','1','${this.mm(x1)}','${this.mm(y1)}','${this.mm(x2)}','${this.mm(y2)}')`);
+  }
+  circle(l, x, y, r){ this.mark(x, y); this.el.push(`circle_feature(${this.head(l)},'1','1','${this.mm(x)}','${this.mm(y)}','${this.mm(r)}')`); }
+  text(l, x, y, h, str, align=0, rot=0){
+    this.mark(x, y);
+    const s = String(str).replace(/['\\]/g, ' ');
+    let w = 0; for(const ch of s) w += ch.charCodeAt(0) < 128 ? 0.6 : 1;   // 半角は高さの6割の幅
+    this.el.push(`text_string_feature(${this.head(l)},'1',\\'${s}\\','${this.mm(x)}','${this.mm(y)}','${this.mm(h)}','${this.mm(h*w)}','0.0','${(+rot || 0).toFixed(6)}','0.0','${align + 1}','1')`);
+  }
+  poly(l, pts, closed=false){
+    if(pts.length < 2) return;
+    const p = closed ? [...pts, pts[0]] : pts;
+    if(this.split){ for(let i=1;i<p.length;i++) this.line(l, p[i-1][0], p[i-1][1], p[i][0], p[i][1]); return; }
+    for(const q of p) this.mark(q[0], q[1]);
+    // 長い折れ線は 500 点ごとに分ける(つなぎ目の点は重ねる)
+    for(let i=0;i<p.length-1;i+=499){
+      const c = p.slice(i, i+500);
+      this.el.push(`polyline_feature(${this.head(l)},'1','1','${c.length}','(${c.map(q => this.mm(q[0])).join(',')})','(${c.map(q => this.mm(q[1])).join(',')})')`);
+    }
+  }
+  poly3d(l, pts, closed=false){ this.poly(l, pts.map(p => [p.x, p.y]), closed); }   // SFCは平面の図面なので高さは持てない
+  toBlob(){
+    const colours = ['black','red','green','blue','yellow','magenta','cyan','white','deeppink','brown','orange','lightgreen','lightblue','lavender','lightgray','darkgray'];
+    const widths = ['0.13','0.18','0.25','0.35','0.5','0.7','1.0','1.4','2.0'];
+    const feats = [];
+    for(const c of colours) feats.push(`pre_defined_colour_feature(\\'${c}\\')`);
+    feats.push(`pre_defined_font_feature(\\'continuous\\')`);
+    for(const w of widths) feats.push(`width_feature('${w}')`);
+    feats.push(`text_font_feature(\\'ＭＳ ゴシック\\')`);
+    for(const e of this.el) feats.push(e);
+    // 用紙と、部分図を置く位置(図形が用紙の真ん中に来るように)
+    const papers = [[297,210],[420,297],[594,420],[841,594],[1189,841]];
+    let pp = papers[0], ox = 0, oy = 0;
+    if(this.xs.length){
+      const sx = Float64Array.from(this.xs).sort(), sy = Float64Array.from(this.ys).sort();
+      let x0 = sx[0], x1 = sx[sx.length-1], y0 = sy[0], y1 = sy[sy.length-1];
+      const q = (a, t) => a[Math.min(a.length-1, Math.floor(a.length*t))];
+      const rx0 = q(sx,0.02), rx1 = q(sx,0.98), ry0 = q(sy,0.02), ry1 = q(sy,0.98);
+      this.outlier = (rx1-rx0) < (x1-x0)*0.7 || (ry1-ry0) < (y1-y0)*0.7;
+      if(this.outlier){ const mx = (rx1-rx0)*0.05, my = (ry1-ry0)*0.05; x0 = rx0-mx; x1 = rx1+mx; y0 = ry0-my; y1 = ry1+my; }
+      const w = (x1-x0)/this.scale, h = (y1-y0)/this.scale;   // 紙の上での大きさ(mm)
+      const sel = parseInt($('cadPaper').value);
+      const pi = sel >= 0 ? sel : papers.findIndex(p => p[0]-20 >= w && p[1]-20 >= h);
+      pp = papers[pi < 0 ? papers.length-1 : pi];
+      this.paper = 'A' + (4 - papers.indexOf(pp)) + (pp[0] >= w && pp[1] >= h ? '' : '(はみ出します)');
+      ox = pp[0]/2 - (x0+x1)/2/this.scale; oy = pp[1]/2 - (y0+y1)/2/this.scale;
+    }
+    const name = 'S1_' + this.scale, r = (1/this.scale).toFixed(14);
+    feats.push(`sfig_org_feature(\\'${name}\\','1')`);
+    feats.push(`sfig_locate_feature('0',\\'${name}\\','${ox.toFixed(6)}','${oy.toFixed(6)}','0.00000000000000','${r}','${r}')`);
+    feats.push(`drawing_sheet_feature(\\'${baseName().replace(/['\\]/g, ' ')}\\','${4 - papers.indexOf(pp)}','1','${pp[0]}','${pp[1]}')`);
+    for(const l of this.layers.keys()) feats.push(`layer_feature(\\'${String(l).replace(/['\\]/g, ' ')}\\','1')`);
+    const d = new Date(), z = v => String(v).padStart(2, '0');
+    const head = ['ISO-10303-21;', 'HEADER;', "FILE_DESCRIPTION(('SCADEC level2 feature_mode'),", "        '2;1');",
+      "FILE_NAME('drawing.sfc',", `        '${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}T${d.getHours()}:${d.getMinutes()}:${d.getSeconds()}',`,
+      "        (''),", "        (''),", "        'SCADEC_API_Ver3.21',", "        'kantan-tengun-scope',", "        '');",
+      "FILE_SCHEMA(('ASSOCIATIVE_DRAUGHTING'));", 'ENDSEC;', 'DATA;', ''];
+    const chunks = [encodeSjis(head.join('\r\n') + '\r\n')];
+    for(let i=0;i<feats.length;i+=20000){
+      let s = '';
+      for(let k=i;k<Math.min(i+20000, feats.length);k++) s += `/*SXF\r\n#${(k+1)*10} = ${feats[k]}\r\nSXF*/\r\n\r\n`;
+      chunks.push(encodeSjis(s));
+    }
+    chunks.push(encodeSjis('ENDSEC;\r\nEND-ISO-10303-21;\r\n'));
+    return new Blob(chunks, {type:'application/octet-stream'});
+  }
+}
+function cadIsSfc(){ return $('cadFormat').value === 'sfc'; }
+function cadExt(){ return cadIsSfc() ? '.sfc' : '.dxf'; }
+function newCadWriter(scale){ return cadIsSfc() ? new SfcWriter(scale) : new DxfWriter(cadUnitFactor(), scale); }
 function cadUnitFactor(){ return $(mode === 'section' ? 'secUnit' : 'cadUnit').value === 'mm' ? 1000 : 1; }
 function cadTextH(scaleSel){ return 2.5 * parseFloat($(scaleSel).value) / 1000; } // 紙面2.5mm
 
@@ -2939,7 +3034,7 @@ function exportPlanDXF(){
   const spot = parseFloat($('planSpot').value);
   const th = cadTextH('planScale');
   const o = globalOffset;
-  const dxf = new DxfWriter(cadUnitFactor(), parseFloat($('planScale').value));
+  const dxf = newCadWriter(parseFloat($('planScale').value));
   const L_MINOR = dxf.layer(LN('主曲線','CONTOUR_MINOR'), 3);
   const L_MAJOR = dxf.layer(LN('計曲線','CONTOUR_MAJOR'), 1);
   const L_LABEL = dxf.layer(LN('等高線文字','CONTOUR_LABEL'), 1);
@@ -3103,7 +3198,7 @@ function exportSectionDXF(){
   if(samples.length < 5) return {error:'断面線の近くに点がありません'};
   const design = designLinesAlong(t => frameAt(info, t), 0, L);
   const a = picked[0], b = picked[picked.length-1];
-  const dxf = new DxfWriter(cadUnitFactor(), parseFloat($('secScale').value));
+  const dxf = newCadWriter(parseFloat($('secScale').value));
   const Ly = sectionLayers(dxf);
   const th = cadTextH('secScale');
   const o = globalOffset;
@@ -3124,7 +3219,7 @@ function exportCrossSectionsDXF(){
   const info = polyInfo(picked), Lc = info.total;
   const nSt = Math.floor(Lc/pitch + 1e-9) + 1;
   const grid = buildGridIndex(Math.max(W, 1));
-  const dxf = new DxfWriter(cadUnitFactor(), parseFloat($('secScale').value));
+  const dxf = newCadWriter(parseFloat($('secScale').value));
   const Ly = sectionLayers(dxf);
   const th = cadTextH('secScale');
   const J = cadSjis();
@@ -3325,6 +3420,7 @@ function updateBasePlane(){
 const SAVE_TYPES = {
   dxf: {description:'DXF 図面', accept:{'application/dxf':['.dxf']}},
   las: {description:'LAS 点群', accept:{'application/octet-stream':['.las']}},
+  sfc: {description:'SFC 図面(SXF)', accept:{'application/octet-stream':['.sfc']}},
   csv: {description:'CSV', accept:{'text/csv':['.csv']}},
   txt: {description:'テキスト', accept:{'text/plain':['.txt']}},
   tgscope: {description:'点群スコープの作業ファイル', accept:{'application/octet-stream':['.tgscope']}}
@@ -3502,7 +3598,7 @@ function exportProfileDXF(){
   const scale = parseFloat($('lpScale').value);
   const th = 2.5 * scale / 1000;
   const o = globalOffset, J = cadSjis();
-  const dxf = new DxfWriter(cadUnitFactor(), scale);
+  const dxf = newCadWriter(scale);
   const LG =dxf.layer(LN('地盤線','GROUND_LINE'), 3);
   const LD = dxf.layer(LN('基準線','DATUM'), 7);
   const LS = dxf.layer(LN('測点線','STATION_LINE'), 8);
@@ -4132,7 +4228,7 @@ function writeTraces(dxf, use3d){
 }
 function exportTraceDXF(){
   if(!traces.length) return {error:'作図がありません'};
-  const dxf = new DxfWriter(cadUnitFactor(), parseFloat($('planScale').value));
+  const dxf = newCadWriter(parseFloat($('planScale').value));
   const n = writeTraces(dxf, $('trace3d').checked);
   return {blob: dxf.toBlob(), msg: `${n} 個`};
 }
@@ -5867,15 +5963,15 @@ function wireUI(){
   // --- 図面(DXF) ---
   $('planDxfBtn').addEventListener('click', ()=>{
     if(!positions) return;
-    saveFlow(baseName() + '_平面図.dxf', '平面図を作成中...', exportPlanDXF);
+    saveFlow(baseName() + '_平面図' + cadExt(), '平面図を作成中...', exportPlanDXF);
   });
   $('secDxfBtn').addEventListener('click', ()=>{
     if(picked.length < 2){ toast('先に断面線を2点で指定してください'); return; }
-    saveFlow(baseName() + '_断面図.dxf', '断面図を作成中...', exportSectionDXF);
+    saveFlow(baseName() + '_断面図' + cadExt(), '断面図を作成中...', exportSectionDXF);
   });
   $('xsDxfBtn').addEventListener('click', ()=>{
     if(picked.length < 2){ toast('先に中心線を2点で指定してください(始点→終点)'); return; }
-    saveFlow(baseName() + `_横断図_${$('xsPitch').value}m.dxf`, '連続横断図を作成中...', exportCrossSectionsDXF);
+    saveFlow(baseName() + `_横断図_${$('xsPitch').value}m` + cadExt(), '連続横断図を作成中...', exportCrossSectionsDXF);
   });
   $('volPickBtn').addEventListener('click', startVolPick);
   // つなぐ
@@ -5968,14 +6064,14 @@ function wireUI(){
   $('trDelVtxBtn').addEventListener('click', deleteSelectedVertex);
   $('trDxfBtn').addEventListener('click', ()=>{
     if(!traces.length){ toast('作図がありません'); return; }
-    saveFlow(baseName() + '_現況平面図.dxf', '作図を出力中...', exportTraceDXF);
+    saveFlow(baseName() + '_現況平面図' + cadExt(), '作図を出力中...', exportTraceDXF);
   });
   $('trSaveBtn').addEventListener('click', exportTraceJSON);
   $('trLoadBtn').addEventListener('click', ()=> $('trLoadInput').click());
   $('trLoadInput').addEventListener('change', e => { if(e.target.files.length) importTraceJSON(e.target.files[0]); e.target.value = ''; });
   $('lpDxfBtn').addEventListener('click', ()=>{
     if(picked.length < 2){ toast('先に中心線を引いてください'); return; }
-    saveFlow(baseName() + '_縦断図.dxf', '縦断図を作成中...', exportProfileDXF);
+    saveFlow(baseName() + '_縦断図' + cadExt(), '縦断図を作成中...', exportProfileDXF);
   });
   $('lineKind').addEventListener('change', ()=>{ clearPicks(); updateSectionUI(); });
   $('undoPtBtn').addEventListener('click', ()=>{
@@ -5992,6 +6088,7 @@ function wireUI(){
   // --- 出力 ---
   $('expFormat').addEventListener('change', refreshExportUIOrder);
   $('exportBtn').addEventListener('click', doExport);
+  $('cadFormat').addEventListener('change', ()=>{ $('sfcPolyRow').style.display = cadIsSfc() ? '' : 'none'; });
   $('projSaveBtn').addEventListener('click', saveProject);
   $('projOpenBtn').addEventListener('click', ()=> $('fileInput').click());
   $('projNewBtn').addEventListener('click', newWork);
