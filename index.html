@@ -574,8 +574,8 @@ input,select{font-family:inherit}
     <div class="secTitle">作図の一覧 <span id="traceCount"></span></div>
     <button class="btn ghost full" id="trEditBtn" style="margin-top:6px">✋ 描いた線を選んで直す</button>
     <div id="trEditRow" style="display:none">
-      <p class="hint" style="margin-top:6px">画面の線か、下の一覧をクリックして選びます。白い丸(角の点)をドラッグすると動かせ、近くの別の点にはくっつきます。</p>
-      <button class="btn ghost full" id="trDelSelBtn" style="margin-top:6px" disabled>🗑️ 選んだ線を削除(Delete)</button>
+      <p class="hint" style="margin-top:6px">画面の線か、下の一覧をクリックして選びます。白い丸(角の点)をドラッグすると動かせ、近くの別の点にはくっつきます。白い丸をクリックするとオレンジになり、その点だけ消せます(右クリックでもすぐ消せます)。途中の点を消すと、前後の点がつながります。</p>
+      <div class="btnRow"><button class="btn ghost" id="trDelVtxBtn" disabled>🗑️ 選んだ点を削除</button><button class="btn ghost" id="trDelSelBtn" disabled>🗑️ 線ごと削除</button></div>
     </div>
     <button class="btn ghost full" id="traceRestoreBtn" style="display:none"></button>
     <div id="traceList" class="trList"></div>
@@ -817,7 +817,7 @@ input,select{font-family:inherit}
     Scaniverse等のiPhoneスキャンアプリのPLYもOK<br>
     ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。<br>
     保存した作業ファイル(.tgscope)もここから開けます。<br>
-    バージョン 2026-10-02a
+    バージョン 2026-10-02b
   </div>
 </div>
 
@@ -1543,7 +1543,10 @@ function onTap(clientX, clientY, btn=0){
     return;
   }
   if(mode === 'trace'){
-    if(traceEdit){ if(btn === 0) traceSelectAt(clientX, clientY); }
+    if(traceEdit){
+      if(btn === 0) traceSelectAt(clientX, clientY);
+      else if(btn === 2){ const h = traceHit(clientX, clientY, false); if(h && h.vi !== undefined) deleteTraceVertex(h.fi, h.vi); }   // 右クリック=その点を消す
+    }
     else if(btn === 2) finishTrace(false); else if(btn === 0) addTraceVertex(clientX, clientY);
     return;
   }
@@ -3751,25 +3754,25 @@ function traceUndo(){
   const s = traceUndoStack.pop();
   if(s === undefined){ toast('元に戻せる作図はありません'); return; }
   traceRedoStack.push(JSON.stringify(traces));
-  traces = JSON.parse(s); traceSel = -1;
+  traces = JSON.parse(s); traceSel = traceSelV = -1;
   traceChanged();
 }
 function traceRedo(){
   const s = traceRedoStack.pop();
   if(s === undefined){ toast('進める作図はありません'); return; }
   traceUndoStack.push(JSON.stringify(traces));
-  traces = JSON.parse(s); traceSel = -1;
+  traces = JSON.parse(s); traceSel = traceSelV = -1;
   traceChanged();
 }
-function deleteTrace(i){ pushTraceUndo(); traces.splice(i, 1); traceSel = -1; traceChanged(); }
+function deleteTrace(i){ pushTraceUndo(); traces.splice(i, 1); traceSel = traceSelV = -1; traceChanged(); }
 
 /* --- 描いた線を選んで直す(角の点をドラッグで移動・線ごと削除) --- */
-let traceEdit = false, traceSel = -1;
+let traceEdit = false, traceSel = -1, traceSelV = -1;   // 選んでいる線と、その中の角の点
 function setTraceEdit(on){
   if(on === traceEdit) return;
   if(on){ if(traceCur && traceCur.pts.length >= 2) finishTrace(false); else traceCur = null; }
-  traceEdit = on; traceSel = -1;
-  if(on) setGuide('✋ 線をクリックで選ぶ → 角の点をドラッグで移動 / Delete キーか「選んだ線を削除」で削除');
+  traceEdit = on; traceSel = traceSelV = -1;
+  if(on) setGuide('✋ 線をクリックで選ぶ → 角の点をドラッグで移動 / 点を右クリックで点を削除 / Delete で削除');
   else if(mode === 'trace'){ const t = traceType; setTraceType(t); }
   renderTraceTypes();
   traceChanged(false);
@@ -3793,7 +3796,23 @@ function traceHit(x, y, touch){
 function traceSelectAt(x, y){
   const h = traceHit(x, y, false);
   traceSel = h ? h.fi : -1;
+  traceSelV = h && h.vi !== undefined ? h.vi : -1;
   renderTraceList();
+}
+// 角の点を1つ消す。連続線の途中の点なら、前後の点が直接つながる
+function deleteTraceVertex(fi, vi){
+  const f = traces[fi];
+  if(!f || vi < 0 || vi >= f.pts.length) return;
+  if(f.pts.length <= 2){ deleteTrace(fi); toast('点が足りなくなるので、線ごと削除しました'); return; }
+  pushTraceUndo();
+  f.pts.splice(vi, 1);
+  if(f.closed && f.pts.length < 3) f.closed = false;
+  traceSel = fi; traceSelV = -1;
+  traceChanged();
+}
+function deleteSelectedVertex(){
+  if(traceSel < 0 || traceSelV < 0){ toast('先に、消したい角の点(白い丸)をクリックして選んでください'); return; }
+  deleteTraceVertex(traceSel, traceSelV);
 }
 function deleteSelectedTrace(){
   if(traceSel < 0 || traceSel >= traces.length){ toast('先に線をクリックして選んでください'); return; }
@@ -3809,7 +3828,7 @@ const traceDrag = {
     const h0 = hitAtZ(x, y, p.z - globalOffset.z);
     if(!h0) return false;
     this.cur = {...h, orig: {...p}, h0, moved: false, last: [x, y]};
-    traceSel = h.fi; renderTraceList();
+    traceSel = h.fi; traceSelV = h.vi; renderTraceList();
     renderer.domElement.style.cursor = 'grabbing';
     return true;
   },
@@ -3846,7 +3865,7 @@ const traceDrag = {
   }
 };
 function traceChanged(save=true){
-  if(traceSel >= traces.length) traceSel = -1;
+  if(traceSel >= traces.length) traceSel = traceSelV = -1;
   rebuildTraceScene();
   renderTraceList();
   if(save) saveTraceLocal();
@@ -3907,6 +3926,7 @@ function renderTraceList(){
   $('trEditBtn').textContent = traceEdit ? '✋ 直すのを終わる(描くに戻る)' : '✋ 描いた線を選んで直す';
   $('trEditRow').style.display = traceEdit ? '' : 'none';
   $('trDelSelBtn').disabled = traceSel < 0;
+  $('trDelVtxBtn').disabled = traceSel < 0 || traceSelV < 0;
   if(!traces.length){ el.innerHTML = '<p class="hint" style="margin-top:6px">まだ作図はありません。</p>'; return; }
   el.innerHTML = traces.map((f, i) => {
     const T = TT(f.type);
@@ -3922,7 +3942,7 @@ function renderTraceTypes(){
 function setTraceType(id){
   if(traceCur && traceCur.pts.length >= 2) finishTrace(false);
   else traceCur = null;
-  traceEdit = false; traceSel = -1;
+  traceEdit = false; traceSel = traceSelV = -1;
   traceType = id;
   renderTraceTypes();
   const T = TT(id);
@@ -4059,11 +4079,11 @@ function drawTraceOverlay(ctx){
   if(traceEdit && traces[traceSel]) drawTraceSelected(ctx, traces[traceSel]);
   for(const f of traces) drawTraceFeature(ctx, f, false);
   if(traceEdit){
-    if(traces[traceSel]) for(const p of traces[traceSel].pts){
-      const q = toScreen(toLocal(p));
-      ctx.beginPath(); ctx.arc(q[0], q[1], 6.5, 0, Math.PI*2); ctx.fillStyle = '#fff'; ctx.fill();
-      ctx.lineWidth = 2.5; ctx.strokeStyle = TT(traces[traceSel].type).color; ctx.stroke();
-    }
+    if(traces[traceSel]) traces[traceSel].pts.forEach((p, vi) => {
+      const q = toScreen(toLocal(p)), on = vi === traceSelV;   // 選んだ点はオレンジで大きく
+      ctx.beginPath(); ctx.arc(q[0], q[1], on ? 8.5 : 6.5, 0, Math.PI*2); ctx.fillStyle = on ? '#ff8a2a' : '#fff'; ctx.fill();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = on ? '#fff' : TT(traces[traceSel].type).color; ctx.stroke();
+    });
     return;
   }
   if(traceCur && traceCur.pts.length) drawTraceFeature(ctx, traceCur, true);
@@ -5510,7 +5530,7 @@ function setMode(m){
   }
   if(mode === 'trace' && m !== 'trace'){
     if(traceCur && traceCur.pts.length >= 2) finishTrace(false); else cancelTrace();
-    traceEdit = false; traceSel = -1;
+    traceEdit = false; traceSel = traceSelV = -1;
     setOrtho(false);
     controls.lockRotate = false;
   }
@@ -5795,10 +5815,11 @@ function wireUI(){
     const b = e.target.closest('.trDel');
     if(b){ deleteTrace(+b.dataset.i); return; }
     const it = e.target.closest('.trItem');
-    if(it){ setTraceEdit(true); traceSel = +it.dataset.i; renderTraceList(); }   // 一覧から選ぶ
+    if(it){ setTraceEdit(true); traceSel = +it.dataset.i; traceSelV = -1; renderTraceList(); }   // 一覧から選ぶ
   });
   $('trEditBtn').addEventListener('click', ()=> setTraceEdit(!traceEdit));
   $('trDelSelBtn').addEventListener('click', deleteSelectedTrace);
+  $('trDelVtxBtn').addEventListener('click', deleteSelectedVertex);
   $('trDxfBtn').addEventListener('click', ()=>{
     if(!traces.length){ toast('作図がありません'); return; }
     saveFlow(baseName() + '_現況平面図.dxf', '作図を出力中...', exportTraceDXF);
@@ -5857,7 +5878,11 @@ function wireUI(){
     if(mode === 'trace'){
       if(e.key === 'Enter'){ e.preventDefault(); finishTrace(false); return; }
       if(e.key.toLowerCase() === 'c' && traceCur){ e.preventDefault(); finishTrace(true); return; }
-      if(traceEdit && (e.key === 'Delete' || e.key === 'Backspace') && traceSel >= 0){ e.preventDefault(); deleteSelectedTrace(); return; }
+      if(traceEdit && (e.key === 'Delete' || e.key === 'Backspace') && traceSel >= 0){
+        e.preventDefault();
+        if(traceSelV >= 0) deleteSelectedVertex(); else deleteSelectedTrace();   // 点を選んでいれば点、そうでなければ線ごと
+        return;
+      }
       if(e.key === 'Escape'){ if(traceEdit) setTraceEdit(false); else cancelTrace(); return; }
       if(e.key === 'Backspace' && traceCur){ e.preventDefault(); traceUndo(); return; }
     }
