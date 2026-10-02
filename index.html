@@ -830,7 +830,7 @@ body:not(.showHints) .panel p.hint:not([id]){display:none}
     Scaniverse等のiPhoneスキャンアプリのPLYもOK<br>
     ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。<br>
     保存した作業ファイル(.tgscope)もここから開けます。<br>
-    バージョン 2026-10-02d
+    バージョン 2026-10-02e
   </div>
 </div>
 
@@ -3858,13 +3858,15 @@ const traceDrag = {
     const p = traces[h.fi].pts[h.vi];
     const h0 = hitAtZ(x, y, p.z - globalOffset.z);
     if(!h0) return false;
-    this.cur = {...h, orig: {...p}, h0, moved: false, last: [x, y]};
+    this.cur = {...h, orig: {...p}, h0, moved: false, last: [x, y], down: [x, y]};
     if(traceEdit){ traceSel = h.fi; traceSelV = h.vi; renderTraceList(); }
     renderer.domElement.style.cursor = 'grabbing';
     return true;
   },
   move(x, y){
     const c = this.cur; if(!c) return;
+    // 少し動いただけならクリックとみなす(点の上をクリックして線を引き始められるように)
+    if(!c.moved && Math.hypot(x-c.down[0], y-c.down[1]) < 6) return;
     const h = hitAtZ(x, y, c.orig.z - globalOffset.z); if(!h) return;
     if(!c.moved){ pushTraceUndo(); c.moved = true; }
     const p = traces[c.fi].pts[c.vi];
@@ -3883,15 +3885,16 @@ const traceDrag = {
     const c = this.cur; if(!c) return;
     this.cur = null;
     renderer.domElement.style.cursor = '';
-    if(!c.moved) return;
+    // 動かさずに離した=クリック。描くモードなら、その点から線を引く(点にくっつく)
+    if(!c.moved){ if(!traceEdit) addTraceVertex(c.down[0], c.down[1]); return; }
     // 高さは、動かした先の点群に合わせる
     if(!c.snapped){ const g = pickQuiet(c.last[0], c.last[1]); if(g) traces[c.fi].pts[c.vi].z = g.z + globalOffset.z; }
     traceChanged();
   },
   hover(x, y){
     if(mode !== 'trace') return;
-    const h = traceEdit || !traceCur ? traceHit(x, y, false) : null;
-    if(!traceEdit){ renderer.domElement.style.cursor = h && h.vi !== undefined ? 'grab' : 'crosshair'; return; }
+    if(!traceEdit){ renderer.domElement.style.cursor = 'crosshair'; return; }
+    const h = traceHit(x, y, false);
     renderer.domElement.style.cursor = !h ? '' : (h.vi !== undefined ? 'grab' : 'copy');
   }
 };
