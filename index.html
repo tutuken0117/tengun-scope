@@ -751,15 +751,13 @@ body:not(.showHints) .panel p.hint:not([id]){display:none}
     <select id="cadUnit"><option value="m">m(メートル)</option><option value="mm">mm(ミリ)</option></select></div>
   <div class="row"><label>文字コード</label>
     <select id="cadEnc"><option value="sjis" selected>Shift_JIS(日本のCAD向け)</option><option value="utf8">UTF-8(英語レイヤ名)</option></select></div>
-  <label class="chkRow"><input type="checkbox" id="planTrace" checked> ✏️作図した現況構造物を入れる</label>
-  <label class="chkRow"><input type="checkbox" id="planOutline"> 点群の範囲を示す線(青い外形線)を入れる</label>
-  <label class="chkRow"><input type="checkbox" id="planPoints"> 点群も3Dの点として入れる</label>
+  <label class="chkRow"><input type="checkbox" id="planTrace" checked> ✏️作図した現況構造物を入れる</label>  <label class="chkRow"><input type="checkbox" id="planPoints"> 点群も3Dの点として入れる</label>
   <div class="row"><label>点の間隔</label>
     <select id="planPtsCell"><option value="0.5">0.5 m</option><option value="1" selected>1 m</option><option value="2">2 m</option></select></div>
   <button class="btn full" id="planDxfBtn">📐 平面図を出力</button>
   <p class="hint" style="margin-top:6px">保存するときにファイル名と保存先を選べます。</p>
   <p class="hint" style="margin-top:10px">
-    <b>レイヤ</b>: 主曲線 / 計曲線(5本ごと) / 等高線文字 / 標高点 / 外形線 / 標定点 / 点群 / 作図の種類ごと(道路端・側溝・建物など)<br>
+    <b>レイヤ</b>: 主曲線 / 計曲線(5本ごと) / 等高線文字 / 標高点 / 標定点 / 点群 / 作図の種類ごと(道路端・側溝・建物など)<br>
     日本語が文字化けする場合は文字コードを「UTF-8」にしてください(レイヤ名が英語になります)。この設定は断面・縦断図にも使われます。<br>
     <b>座標</b>: 図面の横(x)=東(公共Y)、縦(y)=北(公共X)。等高線は標高を持った線です。<br>
     <b>用紙</b>: 選んだ縮尺と用紙で、図形が用紙の真ん中に来る位置を書き込みます(図形の座標は動かしません)。CAD側でも同じ縮尺・用紙にしてください。断面・縦断図にもこの用紙の設定を使います。<br>
@@ -843,7 +841,7 @@ body:not(.showHints) .panel p.hint:not([id]){display:none}
     Scaniverse等のiPhoneスキャンアプリのPLYもOK<br>
     ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。<br>
     保存した作業ファイル(.tgscope)もここから開けます。<br>
-    バージョン 2026-10-02i
+    バージョン 2026-10-02j
   </div>
 </div>
 
@@ -3040,7 +3038,6 @@ function exportPlanDXF(){
   const L_MAJOR = dxf.layer(LN('計曲線','CONTOUR_MAJOR'), 1);
   const L_LABEL = dxf.layer(LN('等高線文字','CONTOUR_LABEL'), 1);
   const L_SPOT  = dxf.layer(LN('標高点','SPOT_HEIGHT'), 7);
-  const L_OUT   = $('planOutline').checked ? dxf.layer(LN('外形線','OUTLINE'), 5) : null;
   const L_GCP   = dxf.layer(LN('標定点','GCP'), 6);
   const L_PTS   = dxf.layer(LN('点群','POINTS'), 8);
 
@@ -3066,14 +3063,6 @@ function exportPlanDXF(){
         dxf.text(L_LABEL, m[0], m[1], th*0.8, lvR.toFixed(interval<1?2:1), 1);
       }
     }
-  }
-  // 範囲の外形(点群のある範囲を示す線。チェックした時だけ)
-  const occ = new Float64Array((nx+2)*(ny+2));
-  for(let j=0;j<ny;j++) for(let i=0;i<nx;i++) occ[(j+1)*(nx+2)+(i+1)] = dem.cnt[j*nx+i] ? 1 : 0;
-  const outSegs = L_OUT ? marchingSegments(occ, nx+2, ny+2, x0-cell, y0-cell, cell, 0.5) : [];
-  for(const ln of chainSegments(outSegs)){
-    if(ln.length < 4) continue;
-    dxf.poly(L_OUT, ln.map(p=>[p[0]+o.x, p[1]+o.y]), false, 0);
   }
   // 標高点
   let spotCount = 0;
