@@ -129,6 +129,8 @@ input,select{font-family:inherit}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;flex-shrink:0}
 .trList{max-height:220px;overflow-y:auto;margin-top:6px}
 .trItem{display:flex;align-items:center;gap:4px;padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px}
+.trItem{cursor:pointer}
+.trItem.sel{background:var(--accent-soft);border-radius:6px}
 .trInfo{flex:1;color:var(--text-dim);font-size:11px;text-align:right;font-variant-numeric:tabular-nums}
 .trDel{width:24px;height:24px;border-radius:6px;color:var(--text-dim);flex-shrink:0}
 .trDel:hover{background:rgba(255,93,93,.15);color:var(--red)}
@@ -570,6 +572,11 @@ input,select{font-family:inherit}
 
   <div class="sec">
     <div class="secTitle">作図の一覧 <span id="traceCount"></span></div>
+    <button class="btn ghost full" id="trEditBtn" style="margin-top:6px">✋ 描いた線を選んで直す</button>
+    <div id="trEditRow" style="display:none">
+      <p class="hint" style="margin-top:6px">画面の線か、下の一覧をクリックして選びます。白い丸(角の点)をドラッグすると動かせ、近くの別の点にはくっつきます。</p>
+      <button class="btn ghost full" id="trDelSelBtn" style="margin-top:6px" disabled>🗑️ 選んだ線を削除(Delete)</button>
+    </div>
     <button class="btn ghost full" id="traceRestoreBtn" style="display:none"></button>
     <div id="traceList" class="trList"></div>
     <div class="btnRow"><button class="btn ghost" id="trUndoBtn">↩️ 元に戻す(Ctrl+Z)</button><button class="btn ghost" id="trRedoBtn">↪️ 進む(Ctrl+Y)</button></div>
@@ -746,6 +753,12 @@ input,select{font-family:inherit}
   <p class="hint" id="expWarn" style="margin-top:8px;color:var(--accent)"></p>
   <button class="btn full" id="exportBtn">💾 出力する</button>
   <div class="sec">
+    <div class="secTitle">作業の保存(あとで続きから)</div>
+    <p class="hint">今の作業を1つのファイル(.tgscope)に保存します。点群・標定点・作図・土量の範囲・TIN(手で直した内容も)が入ります。開くときは「作業を開く」か、画面にファイルをドロップします。</p>
+    <div class="btnRow"><button class="btn" id="projSaveBtn">💾 作業を保存(Ctrl+S)</button><button class="btn ghost" id="projOpenBtn">📂 作業を開く</button></div>
+    <div class="btnRow"><button class="btn ghost" id="projNewBtn">🆕 新規(最初の画面に戻る)</button></div>
+  </div>
+  <div class="sec">
     <div class="secTitle">点密度チェック</div>
     <p class="hint">面管理に必要な点密度があるかを確認します。</p>
     <button class="btn full ghost" id="densityBtn">点密度を調べる</button>
@@ -803,7 +816,8 @@ input,select{font-family:inherit}
     対応形式: <b>XYZ / CSV / TXT / PTS</b>(テキスト) ・ <b>LAS</b> ・ <b>PLY</b><br>
     Scaniverse等のiPhoneスキャンアプリのPLYもOK<br>
     ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。<br>
-    バージョン 2026-10-01k
+    保存した作業ファイル(.tgscope)もここから開けます。<br>
+    バージョン 2026-10-02a
   </div>
 </div>
 
@@ -823,9 +837,9 @@ input,select{font-family:inherit}
     <div class="helpItem"><div class="ic">📍</div><div><b>座標モード</b><p>標定点をクリックして既知座標を入力 →「計算する」で較差を確認 →「適用」で公共座標に合わせます。</p></div></div>
     <div class="helpItem"><div class="ic">🧩</div><div><b>点群をつなぐ</b><p>処理済み(座標付き)のLASはそのまま重ね、直接取ったPLYは標定点か共通点で位置を合わせてからつなぎます。1スキャンずつ処理してからつなぐのがおすすめです。</p></div></div>
     <div class="helpItem"><div class="ic">🔺</div><div><b>TIN・計画面</b><p>点群から現況TINを作ってLandXML(SiTECH 3D向け)で保存。設計の計画面(LandXML)を読み込むと、TIN同士の比較で土量を計算し、差をヒートマップで表示。断面図・縦断図にも計画線が入ります。作ったTINは「TINを手で直す」で、とがった点をクリックするか範囲を囲んで消すと、面を貼り直せます。</p></div></div>
-    <div class="helpItem"><div class="ic">✏️</div><div><b>作図(現況構造物)</b><p>道路端・側溝・擁壁・建物・電柱などを点群の上からなぞって描きます。真上の平行投影で表示され、「段差・勾配を強調」の色で縁石や法肩の線が見やすくなります。Enter=確定 / C=閉じる / Shift=直角 / Ctrl+Z=元に戻す。</p></div></div>
+    <div class="helpItem"><div class="ic">✏️</div><div><b>作図(現況構造物)</b><p>道路端・側溝・擁壁・建物・電柱などを点群の上からなぞって描きます。真上の平行投影で表示され、「段差・勾配を強調」の色で縁石や法肩の線が見やすくなります。「描いた線を選んで直す」で、線をクリックして選び、角の点をドラッグで動かしたり、線ごと削除したりできます。Enter=確定 / C=閉じる / Shift=直角 / Ctrl+Z=元に戻す。</p></div></div>
     <div class="helpItem"><div class="ic">📐</div><div><b>図面(CAD出力)</b><p>「📐図面」で等高線・標高点の平面図、「⛰️断面」で線を引いて断面図・連続横断図・縦断図をDXFで出力。曲がった道路は「線の引き方」を「中心線(折れ線)」にします。</p></div></div>
-    <div class="helpItem"><div class="ic">💾</div><div><b>出力モード</b><p>編集した点群をLAS・CSV・TXTで保存します。点密度チェックもここ。</p></div></div>
+    <div class="helpItem"><div class="ic">💾</div><div><b>出力モード</b><p>編集した点群をLAS・CSV・TXTで保存します。点密度チェックもここ。「作業を保存」で今の作業をまるごとファイルに残し、あとで続きから再開できます(Ctrl+S)。「新規」で最初の画面に戻ります。</p></div></div>
     <div class="helpItem"><div class="ic">⌨️</div><div><b>キーボード(PC)</b><p>Ctrl+Z=元に戻す / Ctrl+Y=進む / Enter=範囲を確定 / Esc=やめる / Delete=選んだ点を削除</p></div></div>
     <div class="helpItem"><div class="ic">📏</div><div><b>距離モード</b><p>点群の上を2か所タップすると、斜距離・水平距離・高低差が出ます。</p></div></div>
     <div class="helpItem"><div class="ic">⛰️</div><div><b>断面モード</b><p>2か所タップして線を引くと、その線に沿った断面図(横から見た形)が出ます。</p></div></div>
@@ -1529,7 +1543,8 @@ function onTap(clientX, clientY, btn=0){
     return;
   }
   if(mode === 'trace'){
-    if(btn === 2) finishTrace(false); else if(btn === 0) addTraceVertex(clientX, clientY);
+    if(traceEdit){ if(btn === 0) traceSelectAt(clientX, clientY); }
+    else if(btn === 2) finishTrace(false); else if(btn === 0) addTraceVertex(clientX, clientY);
     return;
   }
   if(mode === 'merge' && mergePick){
@@ -2001,6 +2016,7 @@ function updateUndoBtn(){
 function resetEditState(){
   cancelMerge(true); mergeHistory = []; renderMergeHistory();
   tinEx = null; diffResult = null; tinUndoStack = []; tinPick = false;
+  volPoly = null; volDrawing = false;   // 前のデータの土量の範囲を残さない
   traces = []; traceCur = null; traceUndoStack = [];
   rebuildTraceScene(); renderTraceList(); checkTraceRestore();
   resetClip();
@@ -3225,7 +3241,8 @@ const SAVE_TYPES = {
   dxf: {description:'DXF 図面', accept:{'application/dxf':['.dxf']}},
   las: {description:'LAS 点群', accept:{'application/octet-stream':['.las']}},
   csv: {description:'CSV', accept:{'text/csv':['.csv']}},
-  txt: {description:'テキスト', accept:{'text/plain':['.txt']}}
+  txt: {description:'テキスト', accept:{'text/plain':['.txt']}},
+  tgscope: {description:'点群スコープの作業ファイル', accept:{'application/octet-stream':['.tgscope']}}
 };
 function askFileName(suggested){
   return new Promise(resolve => {
@@ -3734,18 +3751,102 @@ function traceUndo(){
   const s = traceUndoStack.pop();
   if(s === undefined){ toast('元に戻せる作図はありません'); return; }
   traceRedoStack.push(JSON.stringify(traces));
-  traces = JSON.parse(s);
+  traces = JSON.parse(s); traceSel = -1;
   traceChanged();
 }
 function traceRedo(){
   const s = traceRedoStack.pop();
   if(s === undefined){ toast('進める作図はありません'); return; }
   traceUndoStack.push(JSON.stringify(traces));
-  traces = JSON.parse(s);
+  traces = JSON.parse(s); traceSel = -1;
   traceChanged();
 }
-function deleteTrace(i){ pushTraceUndo(); traces.splice(i, 1); traceChanged(); }
+function deleteTrace(i){ pushTraceUndo(); traces.splice(i, 1); traceSel = -1; traceChanged(); }
+
+/* --- 描いた線を選んで直す(角の点をドラッグで移動・線ごと削除) --- */
+let traceEdit = false, traceSel = -1;
+function setTraceEdit(on){
+  if(on === traceEdit) return;
+  if(on){ if(traceCur && traceCur.pts.length >= 2) finishTrace(false); else traceCur = null; }
+  traceEdit = on; traceSel = -1;
+  if(on) setGuide('✋ 線をクリックで選ぶ → 角の点をドラッグで移動 / Delete キーか「選んだ線を削除」で削除');
+  else if(mode === 'trace'){ const t = traceType; setTraceType(t); }
+  renderTraceTypes();
+  traceChanged(false);
+}
+// 画面上で一番近い 角の点 {fi, vi} / 線 {fi} を探す
+function traceHit(x, y, touch){
+  const RV = touch ? 24 : 12, RL = touch ? 14 : 8;
+  let bv = null, dv = RV, bl = null, dl = RL;
+  traces.forEach((f, fi) => {
+    const sp = f.pts.map(p => toScreen(toLocal(p)));
+    sp.forEach((s, vi) => {
+      // 選んでいる線の点を優先する
+      const d = Math.hypot(x-s[0], y-s[1]) - (fi === traceSel ? 4 : 0);
+      if(d < dv){ dv = d; bv = {fi, vi}; }
+    });
+    const n = f.closed ? sp.length : sp.length-1;
+    for(let i=0;i<n;i++){ const d = distToSeg(x, y, sp[i], sp[(i+1)%sp.length]); if(d < dl){ dl = d; bl = {fi}; } }
+  });
+  return bv || bl;
+}
+function traceSelectAt(x, y){
+  const h = traceHit(x, y, false);
+  traceSel = h ? h.fi : -1;
+  renderTraceList();
+}
+function deleteSelectedTrace(){
+  if(traceSel < 0 || traceSel >= traces.length){ toast('先に線をクリックして選んでください'); return; }
+  deleteTrace(traceSel);
+}
+const traceDrag = {
+  cur: null,
+  start(x, y, touch=false){
+    if(mode !== 'trace' || !traceEdit) return false;
+    const h = traceHit(x, y, touch);
+    if(!h || h.vi === undefined) return false;
+    const p = traces[h.fi].pts[h.vi];
+    const h0 = hitAtZ(x, y, p.z - globalOffset.z);
+    if(!h0) return false;
+    this.cur = {...h, orig: {...p}, h0, moved: false, last: [x, y]};
+    traceSel = h.fi; renderTraceList();
+    renderer.domElement.style.cursor = 'grabbing';
+    return true;
+  },
+  move(x, y){
+    const c = this.cur; if(!c) return;
+    const h = hitAtZ(x, y, c.orig.z - globalOffset.z); if(!h) return;
+    if(!c.moved){ pushTraceUndo(); c.moved = true; }
+    const p = traces[c.fi].pts[c.vi];
+    p.x = c.orig.x + h.x - c.h0.x; p.y = c.orig.y + h.y - c.h0.y;
+    // 近くにある別の点にくっつける
+    let bd = 10;
+    traces.forEach((f, fi) => f.pts.forEach((q, vi) => {
+      if(fi === c.fi && vi === c.vi) return;
+      const s = toScreen(toLocal(q)), d = Math.hypot(x-s[0], y-s[1]);
+      if(d < bd){ bd = d; p.x = q.x; p.y = q.y; p.z = q.z; }
+    }));
+    if(bd === 10) p.z = c.orig.z;
+    c.snapped = bd < 10; c.last = [x, y];
+  },
+  end(){
+    const c = this.cur; if(!c) return;
+    this.cur = null;
+    renderer.domElement.style.cursor = '';
+    if(!c.moved) return;
+    // 高さは、動かした先の点群に合わせる
+    if(!c.snapped){ const g = pickQuiet(c.last[0], c.last[1]); if(g) traces[c.fi].pts[c.vi].z = g.z + globalOffset.z; }
+    traceChanged();
+  },
+  hover(x, y){
+    if(mode !== 'trace') return;
+    if(!traceEdit){ renderer.domElement.style.cursor = 'crosshair'; return; }
+    const h = traceHit(x, y, false);
+    renderer.domElement.style.cursor = !h ? '' : (h.vi !== undefined ? 'grab' : 'pointer');
+  }
+};
 function traceChanged(save=true){
+  if(traceSel >= traces.length) traceSel = -1;
   rebuildTraceScene();
   renderTraceList();
   if(save) saveTraceLocal();
@@ -3802,21 +3903,26 @@ function renderTraceList(){
   $('traceDrawRow').style.display = traceCur ? '' : 'none';
   if(traceCur) $('traceCurInfo').textContent = `${TT(traceCur.type).name}:${traceCur.pts.length} 点`;
   $('traceCount').textContent = traces.length ? `(${traces.length})` : '';
+  $('trEditBtn').classList.toggle('ghost', !traceEdit);
+  $('trEditBtn').textContent = traceEdit ? '✋ 直すのを終わる(描くに戻る)' : '✋ 描いた線を選んで直す';
+  $('trEditRow').style.display = traceEdit ? '' : 'none';
+  $('trDelSelBtn').disabled = traceSel < 0;
   if(!traces.length){ el.innerHTML = '<p class="hint" style="margin-top:6px">まだ作図はありません。</p>'; return; }
   el.innerHTML = traces.map((f, i) => {
     const T = TT(f.type);
     const info = T.type === 'point' ? `Z ${f.pts[0].z.toFixed(2)}`
       : (f.closed ? `周長 ${traceLen(f).toFixed(2)}m・面積 ${traceArea(f).toFixed(1)}m²` : `延長 ${traceLen(f).toFixed(2)}m`);
-    return `<div class="trItem"><span class="dot" style="background:${T.color}"></span><b>${T.name}</b><span class="trInfo">${info}</span><button class="trDel" data-i="${i}" title="削除">✕</button></div>`;
+    return `<div class="trItem${i === traceSel ? ' sel' : ''}" data-i="${i}"><span class="dot" style="background:${T.color}"></span><b>${T.name}</b><span class="trInfo">${info}</span><button class="trDel" data-i="${i}" title="削除">✕</button></div>`;
   }).reverse().join('');
 }
 function renderTraceTypes(){
   $('traceTypes').innerHTML = TRACE_TYPES.map(t =>
-    `<button class="ttBtn ${t.id===traceType?'on':''}" data-t="${t.id}"><span class="dot" style="background:${t.color}"></span>${t.name}<small>${t.type==='point'?'点':(t.type==='polygon'?'囲む':'線')}</small></button>`).join('');
+    `<button class="ttBtn ${t.id===traceType && !traceEdit?'on':''}" data-t="${t.id}"><span class="dot" style="background:${t.color}"></span>${t.name}<small>${t.type==='point'?'点':(t.type==='polygon'?'囲む':'線')}</small></button>`).join('');
 }
 function setTraceType(id){
   if(traceCur && traceCur.pts.length >= 2) finishTrace(false);
   else traceCur = null;
+  traceEdit = false; traceSel = -1;
   traceType = id;
   renderTraceTypes();
   const T = TT(id);
@@ -3936,9 +4042,30 @@ function drawTraceFeature(ctx, f, isCur){
   ctx.fillStyle = T.color;
   for(const q of sp){ ctx.fillRect(q[0]-2.5, q[1]-2.5, 5, 5); }
 }
+// 選んでいる線:白いふちと、つかめる丸い点
+function drawTraceSelected(ctx, f){
+  const T = TT(f.type), sp = f.pts.map(p => toScreen(toLocal(p)));
+  if(T.type !== 'point' && sp.length > 1){
+    ctx.beginPath(); ctx.moveTo(sp[0][0], sp[0][1]); for(let i=1;i<sp.length;i++) ctx.lineTo(sp[i][0], sp[i][1]); if(f.closed) ctx.closePath();
+    ctx.lineWidth = 7; ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.stroke();
+  }
+  for(const q of sp){
+    ctx.beginPath(); ctx.arc(q[0], q[1], 6.5, 0, Math.PI*2);
+    ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = T.color; ctx.stroke();
+  }
+}
 function drawTraceOverlay(ctx){
   if(mode !== 'trace') return;
+  if(traceEdit && traces[traceSel]) drawTraceSelected(ctx, traces[traceSel]);
   for(const f of traces) drawTraceFeature(ctx, f, false);
+  if(traceEdit){
+    if(traces[traceSel]) for(const p of traces[traceSel].pts){
+      const q = toScreen(toLocal(p));
+      ctx.beginPath(); ctx.arc(q[0], q[1], 6.5, 0, Math.PI*2); ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = TT(traces[traceSel].type).color; ctx.stroke();
+    }
+    return;
+  }
   if(traceCur && traceCur.pts.length) drawTraceFeature(ctx, traceCur, true);
   if(!lastMouse) return;
   const [mx, my] = lastMouse;
@@ -4102,7 +4229,7 @@ const volDrag = {
 };
 const dragDispatch = {
   cur: null,
-  pick(){ return mode === 'volume' ? volDrag : lineDrag; },
+  pick(){ return mode === 'volume' ? volDrag : (mode === 'trace' ? traceDrag : lineDrag); },
   start(x, y, t){ const h = this.pick(); if(h.start(x, y, t)){ this.cur = h; return true; } return false; },
   move(x, y){ if(this.cur) this.cur.move(x, y); },
   end(){ if(this.cur) this.cur.end(); this.cur = null; },
@@ -5190,15 +5317,16 @@ function makeDemoTerrain(){
    ========================================================= */
 async function loadFile(file){
   const name = file.name.toLowerCase();
-  const ok = ['.xyz','.csv','.txt','.pts','.las','.laz','.ply'];
+  const ok = ['.xyz','.csv','.txt','.pts','.las','.laz','.ply', PROJ_EXT];
   if(!ok.some(ext => name.endsWith(ext))){
-    toast('⚠️ 対応していないファイルです(XYZ/CSV/TXT/PTS/LAS/PLY)', 4000);
+    toast('⚠️ 対応していないファイルです(XYZ/CSV/TXT/PTS/LAS/PLY/作業ファイル)', 4000);
     return;
   }
   showLoading(`「${file.name}」を読み込み中...`);
   loadedFileName = file.name.replace(/\.[^.]+$/, '');
   $('expName').value = '';
   try{
+    if(name.endsWith(PROJ_EXT)){ await loadProject(await file.arrayBuffer()); return; }
     if(name.endsWith('.laz')){
       throw new Error('LAZ(圧縮)ファイルは非対応です。CloudCompare(無料)などでLAS形式に変換してから読み込んでください。');
     }
@@ -5229,8 +5357,9 @@ function sesDB(){
     q.onerror = () => rej(q.error);
   });
 }
+let sesDisabled = false;   // 新規作成でリロードする直前は保存しない
 function scheduleCloudSave(){
-  if(sesRestoring || !positions) return;
+  if(sesRestoring || sesDisabled || !positions) return;
   clearTimeout(sesTimer);
   sesTimer = setTimeout(saveCloudSession, 300);
 }
@@ -5247,16 +5376,94 @@ async function saveCloudSession(){
     tx.onerror = tx.onabort = () => { console.warn('自動保存に失敗', tx.error); db.close(); };
   }catch(e){ console.warn('自動保存に失敗', e); }
 }
+// 画面の状態(モード・視点・色・標定点・作図・土量の範囲)
+function uiState(){
+  return {
+    mode, cam: {t: controls.target.toArray(), theta: controls.theta, phi: controls.phi, radius: controls.radius},
+    colorMode: $('colorMode').value, ptSize: $('ptSize').value, volBase: $('volBase').value,
+    volPoly: volPoly && volPoly.closed ? volPoly : null, gcps, traces
+  };
+}
+function applyUiState(ui){
+  if(ui.gcps){ gcps = ui.gcps; renderGcpList(); }
+  if(ui.traces && ui.traces.length){ traces = ui.traces; traceChanged(false); $('traceRestoreBtn').style.display = 'none'; }
+  if(ui.ptSize){ $('ptSize').value = ui.ptSize; $('ptSize').dispatchEvent(new Event('input')); }
+  if(ui.colorMode && (ui.colorMode !== 'rgb' || rgbColors)){
+    traceColorInit = true;
+    if(ui.colorMode !== $('colorMode').value){ $('colorMode').value = ui.colorMode; $('colorMode').dispatchEvent(new Event('change')); }
+  }
+  if(ui.volBase) $('volBase').value = ui.volBase;
+  if(ui.volPoly) volPoly = ui.volPoly;
+  setMode($('panel-'+ui.mode) || ui.mode === 'view' ? ui.mode : 'view');
+  if(ui.cam) controls.setPose(new THREE.Vector3().fromArray(ui.cam.t), ui.cam.theta, ui.cam.phi, ui.cam.radius, false);
+}
 function saveUiSession(){
-  if(!positions) return;
+  if(!positions || sesDisabled) return;
   if(sesTimer) saveCloudSession();
+  try{ localStorage.setItem(SES_UI, JSON.stringify(uiState())); }catch(e){}
+}
+
+/* --- 作業ファイル(.tgscope):点群・標定点・作図・土量の範囲・TIN をまとめて1つのファイルに --- */
+const PROJ_MAGIC = 'TGSCOPE1', PROJ_EXT = '.tgscope';
+function buildProject(){
+  const tin = tinEx ? {name: tinEx.name, cell: tinEx.cell, maxE: tinEx.maxE, removed: tinEx.removed, edited: tinEx.edited,
+    fill: [...(tinEx.fill || [])], nPts: tinEx.pts.length, nTri: tinEx.tri.length} : null;
+  const head = {
+    app: 'kantan-tengun-scope', version: 1, saved: new Date().toISOString(),
+    offset: {...globalOffset}, upAxis: currentUpAxis, step: sampleStep, total: pointCountTotal,
+    nPos: positions.length, nCol: rgbColors ? rgbColors.length : 0, ui: uiState(), tin
+  };
+  const enc = new TextEncoder(), json = enc.encode(JSON.stringify(head));
+  const pre = new Uint8Array(12);
+  pre.set(enc.encode(PROJ_MAGIC)); new DataView(pre.buffer).setUint32(8, json.length, true);
+  const parts = [pre, json, positions];
+  if(rgbColors) parts.push(rgbColors);
+  if(tinEx) parts.push(tinEx.pts, tinEx.tri);
+  return {blob: new Blob(parts, {type:'application/octet-stream'}), msg: `${fmtInt(positions.length/3)} 点`};
+}
+function saveProject(){
+  if(!positions){ toast('先に点群を読み込んでください'); return; }
+  saveFlow(baseName() + PROJ_EXT, '作業を保存中...', buildProject);
+}
+async function loadProject(buffer){
+  const u8 = new Uint8Array(buffer);
+  if(new TextDecoder().decode(u8.subarray(0, 8)) !== PROJ_MAGIC) throw new Error('作業ファイルとして読めませんでした');
+  const jl = new DataView(buffer).getUint32(8, true);
+  const head = JSON.parse(new TextDecoder().decode(u8.subarray(12, 12+jl)));
+  let off = 12 + jl;
+  const take = bytes => { const b = buffer.slice(off, off+bytes); off += bytes; return b; };
+  const pos = new Float32Array(take(head.nPos*4));
+  const col = head.nCol ? new Uint8Array(take(head.nCol)) : null;
+  if(pos.length !== head.nPos || pos.length < 3) throw new Error('作業ファイルが壊れています');
+  sesRestoring = true;
   try{
-    localStorage.setItem(SES_UI, JSON.stringify({
-      mode, cam: {t: controls.target.toArray(), theta: controls.theta, phi: controls.phi, radius: controls.radius},
-      colorMode: $('colorMode').value, ptSize: $('ptSize').value, volBase: $('volBase').value,
-      volPoly: volPoly && volPoly.closed ? volPoly : null, gcps, traces
-    }));
+    await buildCloud({positions: pos, offset: head.offset, colors: col, total: head.total, step: head.step});
+    currentUpAxis = head.upAxis || 'Z'; $('upAxis').value = currentUpAxis;
+    if(head.tin){
+      const t = head.tin;
+      tinEx = {name: t.name, cell: t.cell, maxE: t.maxE, removed: t.removed, edited: t.edited, fill: new Set(t.fill),
+        pts: new Float64Array(take(t.nPts*8)), tri: new Uint32Array(take(t.nTri*4))};
+      $('tinName').value = t.name || '現況地形';
+    }
+    if(head.ui) applyUiState(head.ui);
+  }finally{ sesRestoring = false; }
+  scheduleCloudSave();
+  toast('作業を開きました。続きから作業できます', 4000);
+}
+async function newWork(){
+  if(positions && !confirm('今の作業を閉じて、最初の画面に戻ります。\n保存していない内容は消えます。よろしいですか?')) return;
+  sesDisabled = true; clearTimeout(sesTimer); sesTimer = 0;
+  try{ localStorage.removeItem(SES_UI); }catch(e){}
+  try{
+    const db = await sesDB();
+    await new Promise(res => {
+      const tx = db.transaction('session', 'readwrite');
+      tx.objectStore('session').delete('cloud');
+      tx.oncomplete = tx.onerror = tx.onabort = () => res();
+    });
+    db.close();
   }catch(e){}
+  location.reload();
 }
 async function restoreSession(){
   let rec = null;
@@ -5277,19 +5484,7 @@ async function restoreSession(){
     currentUpAxis = rec.upAxis || 'Z'; $('upAxis').value = currentUpAxis;
     let ui = null;
     try{ ui = JSON.parse(localStorage.getItem(SES_UI) || 'null'); }catch(e){}
-    if(ui){
-      if(ui.gcps){ gcps = ui.gcps; renderGcpList(); }
-      if(ui.traces && ui.traces.length){ traces = ui.traces; traceChanged(false); $('traceRestoreBtn').style.display = 'none'; }
-      if(ui.ptSize){ $('ptSize').value = ui.ptSize; $('ptSize').dispatchEvent(new Event('input')); }
-      if(ui.colorMode && (ui.colorMode !== 'rgb' || rgbColors)){
-        traceColorInit = true;
-        if(ui.colorMode !== $('colorMode').value){ $('colorMode').value = ui.colorMode; $('colorMode').dispatchEvent(new Event('change')); }
-      }
-      if(ui.volBase) $('volBase').value = ui.volBase;
-      if(ui.volPoly) volPoly = ui.volPoly;
-      setMode($('panel-'+ui.mode) || ui.mode === 'view' ? ui.mode : 'view');
-      if(ui.cam) controls.setPose(new THREE.Vector3().fromArray(ui.cam.t), ui.cam.theta, ui.cam.phi, ui.cam.radius, false);
-    }
+    if(ui) applyUiState(ui);
     toast('前回の続きから再開しました。別のデータは 📂 から開けます', 4000);
   }catch(e){ console.error(e); hideLoading(); }
   sesRestoring = false;
@@ -5315,6 +5510,7 @@ function setMode(m){
   }
   if(mode === 'trace' && m !== 'trace'){
     if(traceCur && traceCur.pts.length >= 2) finishTrace(false); else cancelTrace();
+    traceEdit = false; traceSel = -1;
     setOrtho(false);
     controls.lockRotate = false;
   }
@@ -5595,7 +5791,14 @@ function wireUI(){
   $('trBackBtn').addEventListener('click', traceUndo);
   $('trCancelBtn').addEventListener('click', cancelTrace);
   $('trUndoBtn').addEventListener('click', traceUndo);
-  $('traceList').addEventListener('click', e => { const b = e.target.closest('.trDel'); if(b) deleteTrace(+b.dataset.i); });
+  $('traceList').addEventListener('click', e => {
+    const b = e.target.closest('.trDel');
+    if(b){ deleteTrace(+b.dataset.i); return; }
+    const it = e.target.closest('.trItem');
+    if(it){ setTraceEdit(true); traceSel = +it.dataset.i; renderTraceList(); }   // 一覧から選ぶ
+  });
+  $('trEditBtn').addEventListener('click', ()=> setTraceEdit(!traceEdit));
+  $('trDelSelBtn').addEventListener('click', deleteSelectedTrace);
   $('trDxfBtn').addEventListener('click', ()=>{
     if(!traces.length){ toast('作図がありません'); return; }
     saveFlow(baseName() + '_現況平面図.dxf', '作図を出力中...', exportTraceDXF);
@@ -5622,6 +5825,9 @@ function wireUI(){
   // --- 出力 ---
   $('expFormat').addEventListener('change', refreshExportUIOrder);
   $('exportBtn').addEventListener('click', doExport);
+  $('projSaveBtn').addEventListener('click', saveProject);
+  $('projOpenBtn').addEventListener('click', ()=> $('fileInput').click());
+  $('projNewBtn').addEventListener('click', newWork);
   $('densityBtn').addEventListener('click', densityCheck);
 
   // --- マウス位置・キーボード ---
@@ -5632,6 +5838,7 @@ function wireUI(){
     if(e.key === 'Shift') shiftDown = true;
     const tag = (e.target.tagName || '').toLowerCase();
     const typing = tag === 'input' || tag === 'select' || tag === 'textarea';
+    if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's'){ e.preventDefault(); saveProject(); return; }
     if((e.ctrlKey || e.metaKey) && !typing && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))){
       e.preventDefault();
       if(mode === 'trace') traceRedo(); else redo();
@@ -5650,7 +5857,8 @@ function wireUI(){
     if(mode === 'trace'){
       if(e.key === 'Enter'){ e.preventDefault(); finishTrace(false); return; }
       if(e.key.toLowerCase() === 'c' && traceCur){ e.preventDefault(); finishTrace(true); return; }
-      if(e.key === 'Escape'){ cancelTrace(); return; }
+      if(traceEdit && (e.key === 'Delete' || e.key === 'Backspace') && traceSel >= 0){ e.preventDefault(); deleteSelectedTrace(); return; }
+      if(e.key === 'Escape'){ if(traceEdit) setTraceEdit(false); else cancelTrace(); return; }
       if(e.key === 'Backspace' && traceCur){ e.preventDefault(); traceUndo(); return; }
     }
     if(e.key === 'Enter' && poly){ e.preventDefault(); closePolygon(); }
