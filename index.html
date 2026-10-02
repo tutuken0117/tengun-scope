@@ -97,8 +97,11 @@ input,select{font-family:inherit}
 .colorBtn select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:16px}
 .colorBtn select option{background:#181d24;color:#e8ecf1}
 /* パネルを閉じるボタン */
-.panelClose{margin-left:auto;width:28px;height:28px;border-radius:8px;font-size:14px;color:var(--text-dim);flex-shrink:0}
-.panelClose:hover{background:rgba(255,255,255,.1);color:var(--text)}
+.panelClose,.panelHelp{width:28px;height:28px;border-radius:8px;font-size:14px;color:var(--text-dim);flex-shrink:0}
+.panelHelp{margin-left:auto}
+.panelClose:hover,.panelHelp:hover{background:rgba(255,255,255,.1);color:var(--text)}
+body.showHints .panelHelp{color:var(--accent)}
+html.edgeHover, html.edgeHover *{cursor:ew-resize !important}
 
 /* ===== オーバーレイ ===== */
 #overlay{position:fixed;inset:0;width:100%;height:100%;z-index:5;pointer-events:none}
@@ -122,10 +125,25 @@ input,select{font-family:inherit}
 .chkRow input{accent-color:var(--accent);width:16px;height:16px}
 
 /* 作図 */
-.ttGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
-.ttBtn{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:7px 8px;border-radius:10px;background:rgba(0,0,0,.25);border:1px solid var(--panel-border);font-size:11.5px;font-weight:700;text-align:left}
-.ttBtn small{font-size:9.5px;color:var(--text-dim);font-weight:600;padding-left:14px}
-.ttBtn.on{border-color:var(--accent);background:var(--accent-soft)}
+/* 描く種類は色の丸で選ぶ(線=丸・囲む=四角・点=輪) */
+.ttChips{display:flex;flex-wrap:wrap;gap:7px}
+.ttChip{width:24px;height:24px;border-radius:50%;background:var(--c);border:2px solid rgba(0,0,0,.35);flex-shrink:0}
+.ttChip.poly{border-radius:6px}
+.ttChip.pt{background:transparent;border:6px solid var(--c)}
+.ttChip.on{outline:2px solid #fff;outline-offset:2px}
+.ttName{font-size:12px;font-weight:700;margin-top:8px;min-height:1.4em}
+.ttName small{color:var(--text-dim);font-weight:600;margin-left:6px}
+/* 折りたたみ */
+details.sec > summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px}
+details.sec > summary::-webkit-details-marker{display:none}
+details.sec > summary::before{content:'▸';color:var(--text-dim);font-size:11px}
+details.sec[open] > summary::before{content:'▾'}
+.sec.fold > .secTitle{cursor:pointer;margin-bottom:0}
+.sec.fold > .secTitle::before{content:'▾ ';color:var(--text-dim);font-size:11px}
+.sec.fold.closed > .secTitle::before{content:'▸ '}
+.sec.fold.closed > :not(.secTitle){display:none !important}
+/* 説明文はふだん隠す(ⓘ で表示) */
+body:not(.showHints) .panel p.hint:not([id]){display:none}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;flex-shrink:0}
 .trList{max-height:220px;overflow-y:auto;margin-top:6px}
 .trItem{display:flex;align-items:center;gap:4px;padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px}
@@ -283,10 +301,10 @@ input,select{font-family:inherit}
 
 /* PC レイアウト */
 @media(min-width:900px){
-  .panel{left:auto;right:16px;bottom:auto;top:80px;width:360px;max-height:calc(100vh - 180px)}
+  .panel{left:auto;right:16px;bottom:auto;top:80px;width:var(--panel-w,300px);max-height:calc(100vh - 180px)}
   #toolbar{bottom:20px}
   .modeBtn{min-width:70px}
-  .panel.wide{width:420px}
+  .panel.wide{width:var(--panel-w,330px)}
 }
 @media(max-width:899px){
   #toolbar{max-width:calc(100vw - 16px);overflow-x:auto;touch-action:pan-x;scrollbar-width:none}
@@ -548,48 +566,42 @@ input,select{font-family:inherit}
 
 <!-- 作図パネル -->
 <div class="panel wide" id="panel-trace">
-  <h3>✏️ 現況の作図(構造物をなぞる)</h3>
-  <div class="secTitle">見やすくする</div>
-  <label class="chkRow"><input type="checkbox" id="traceTop" checked> 真上から平行投影で描く(図面と同じ見え方・ドラッグ=移動)</label>
-  <div class="row"><label>点群の色</label>
-    <select id="traceColor"><option value="slope">段差・勾配を強調</option><option value="hag">地面からの高さ</option><option value="height">標高</option><option value="rgb">元の色(写真)</option></select></div>
-  <p class="hint" style="margin-top:6px">「段差・勾配」は縁石・擁壁・法肩の線が浮き出ます。「地面からの高さ」は建物・構造物・樹木が目立ちます。</p>
-  <div class="row"><label>表示の下限<br><span id="clipLoVal" class="clipVal"></span></label><input type="range" id="clipLo" min="0" max="1000" value="0"></div>
-  <div class="row"><label>表示の上限<br><span id="clipHiVal" class="clipVal"></span></label><input type="range" id="clipHi" min="0" max="1000" value="1000"></div>
-  <p class="hint">上限を下げると屋根や木の枝が消え、壁や柱の位置が見えやすくなります。</p>
-  <button class="btn ghost full" id="clipResetBtn">高さの絞り込みを解除</button>
-
-  <div class="sec">
-    <div class="secTitle">描くもの</div>
-    <div id="traceTypes" class="ttGrid"></div>
-    <p class="hint" style="margin-top:8px">クリックで点を追加 → <b>Enter・右クリック</b>で確定。線を閉じるときは <b>C</b>。<b>Shift</b>を押しながらで直角・一直線。描いた点の近くでは自動でくっつきます(黄色い枠)。</p>
-    <div id="traceDrawRow" style="display:none">
-      <p class="hint" id="traceCurInfo" style="margin-top:6px;color:var(--accent)"></p>
-      <div class="btnRow"><button class="btn" id="trFinishBtn">確定</button><button class="btn ghost" id="trCloseBtn">閉じて確定</button></div>
-      <div class="btnRow"><button class="btn ghost" id="trBackBtn">↶ 1点戻す</button><button class="btn ghost" id="trCancelBtn">やめる</button></div>
-    </div>
+  <h3>✏️ 作図</h3>
+  <div id="traceTypes" class="ttChips"></div>
+  <div class="ttName" id="traceTypeName"></div>
+  <p class="hint">色の丸で描く種類を選びます(丸=線・四角=囲む・輪=点)。クリックで点を追加 → <b>Enter・右クリック</b>で確定。線を閉じるときは <b>C</b>。<b>Shift</b>を押しながらで直角・一直線。描いた点の近くでは自動でくっつきます(黄色い枠)。<br>描いていない時は、角の点を<b>ドラッグで移動</b>、<b>右クリックで削除</b>できます。</p>
+  <div id="traceDrawRow" style="display:none">
+    <p class="hint" id="traceCurInfo" style="margin-top:6px;color:var(--accent)"></p>
+    <div class="btnRow"><button class="btn" id="trFinishBtn">確定</button><button class="btn ghost" id="trCloseBtn">閉じて確定</button></div>
+    <div class="btnRow"><button class="btn ghost" id="trBackBtn">↶ 1点戻す</button><button class="btn ghost" id="trCancelBtn">やめる</button></div>
   </div>
-
-  <div class="sec">
-    <div class="secTitle">作図の一覧 <span id="traceCount"></span></div>
-    <button class="btn ghost full" id="trEditBtn" style="margin-top:6px">✋ 描いた線を選んで直す</button>
-    <div id="trEditRow" style="display:none">
-      <p class="hint" style="margin-top:6px">画面の線か、下の一覧をクリックして選びます。白い丸(角の点)をドラッグすると動かせ、近くの別の点にはくっつきます。白い丸をクリックするとオレンジになり、その点だけ消せます(右クリックでもすぐ消せます)。途中の点を消すと、前後の点がつながります。</p>
-      <div class="btnRow"><button class="btn ghost" id="trDelVtxBtn" disabled>🗑️ 選んだ点を削除</button><button class="btn ghost" id="trDelSelBtn" disabled>🗑️ 線ごと削除</button></div>
-    </div>
-    <button class="btn ghost full" id="traceRestoreBtn" style="display:none"></button>
-    <div id="traceList" class="trList"></div>
-    <div class="btnRow"><button class="btn ghost" id="trUndoBtn">↩️ 元に戻す(Ctrl+Z)</button><button class="btn ghost" id="trRedoBtn">↪️ 進む(Ctrl+Y)</button></div>
+  <div class="btnRow"><button class="btn ghost" id="trEditBtn">✋ 直す</button><button class="btn ghost" id="trUndoBtn" title="元に戻す(Ctrl+Z)">↩️</button><button class="btn ghost" id="trRedoBtn" title="進む(Ctrl+Y)">↪️</button></div>
+  <div id="trEditRow" style="display:none">
+    <p class="hint" style="margin-top:6px">すべての角の点が白い丸で出ます。丸をドラッグ=移動(近くの別の点にくっつきます)。線の上をクリック=そこに点を追加。丸を右クリック=その点を削除(途中の点なら前後がつながります)。丸をクリックするとオレンジになり、下のボタンや Delete でも消せます。</p>
+    <div class="btnRow"><button class="btn ghost" id="trDelVtxBtn" disabled>🗑️ 点を削除</button><button class="btn ghost" id="trDelSelBtn" disabled>🗑️ 線ごと削除</button></div>
   </div>
+  <button class="btn ghost full" id="traceRestoreBtn" style="display:none"></button>
 
-  <div class="sec">
-    <div class="secTitle">保存・出力</div>
+  <details class="sec">
+    <summary class="secTitle">表示の設定</summary>
+    <label class="chkRow"><input type="checkbox" id="traceTop" checked> 真上から平行投影で描く</label>
+    <div class="row"><label>点群の色</label>
+      <select id="traceColor"><option value="slope">段差・勾配を強調</option><option value="hag">地面からの高さ</option><option value="height">標高</option><option value="rgb">元の色(写真)</option></select></div>
+    <p class="hint" style="margin-top:6px">「段差・勾配」は縁石・擁壁・法肩の線が浮き出ます。「地面からの高さ」は建物・構造物・樹木が目立ちます。</p>
+    <div class="row"><label>表示の下限<br><span id="clipLoVal" class="clipVal"></span></label><input type="range" id="clipLo" min="0" max="1000" value="0"></div>
+    <div class="row"><label>表示の上限<br><span id="clipHiVal" class="clipVal"></span></label><input type="range" id="clipHi" min="0" max="1000" value="1000"></div>
+    <p class="hint">上限を下げると屋根や木の枝が消え、壁や柱の位置が見えやすくなります。</p>
+    <button class="btn ghost full" id="clipResetBtn">高さの絞り込みを解除</button>
+  </details>
+
+  <details class="sec">
+    <summary class="secTitle">保存・出力</summary>
     <label class="chkRow"><input type="checkbox" id="trace3d"> 高さ(Z)を持たせる(3Dの線で出力)</label>
-    <button class="btn full" id="trDxfBtn">📐 現況平面図(作図のみ)をDXF出力</button>
+    <button class="btn full" id="trDxfBtn">📐 作図をDXF出力</button>
     <p class="hint" style="margin-top:6px">等高線と一緒に出すときは「📐図面」の平面図から出力します。単位・文字コードは「📐図面」の設定を使います。作図はこのパソコンに自動で一時保存されます。</p>
-    <div class="btnRow"><button class="btn ghost" id="trSaveBtn">💾 作図を保存</button><button class="btn ghost" id="trLoadBtn">📂 作図を読込</button></div>
+    <div class="btnRow"><button class="btn ghost" id="trSaveBtn">💾 保存</button><button class="btn ghost" id="trLoadBtn">📂 読込</button></div>
     <input type="file" id="trLoadInput" style="display:none">
-  </div>
+  </details>
 </div>
 
 <!-- つなぐパネル -->
@@ -817,7 +829,7 @@ input,select{font-family:inherit}
     Scaniverse等のiPhoneスキャンアプリのPLYもOK<br>
     ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。<br>
     保存した作業ファイル(.tgscope)もここから開けます。<br>
-    バージョン 2026-10-02b
+    バージョン 2026-10-02c
   </div>
 </div>
 
@@ -837,7 +849,7 @@ input,select{font-family:inherit}
     <div class="helpItem"><div class="ic">📍</div><div><b>座標モード</b><p>標定点をクリックして既知座標を入力 →「計算する」で較差を確認 →「適用」で公共座標に合わせます。</p></div></div>
     <div class="helpItem"><div class="ic">🧩</div><div><b>点群をつなぐ</b><p>処理済み(座標付き)のLASはそのまま重ね、直接取ったPLYは標定点か共通点で位置を合わせてからつなぎます。1スキャンずつ処理してからつなぐのがおすすめです。</p></div></div>
     <div class="helpItem"><div class="ic">🔺</div><div><b>TIN・計画面</b><p>点群から現況TINを作ってLandXML(SiTECH 3D向け)で保存。設計の計画面(LandXML)を読み込むと、TIN同士の比較で土量を計算し、差をヒートマップで表示。断面図・縦断図にも計画線が入ります。作ったTINは「TINを手で直す」で、とがった点をクリックするか範囲を囲んで消すと、面を貼り直せます。</p></div></div>
-    <div class="helpItem"><div class="ic">✏️</div><div><b>作図(現況構造物)</b><p>道路端・側溝・擁壁・建物・電柱などを点群の上からなぞって描きます。真上の平行投影で表示され、「段差・勾配を強調」の色で縁石や法肩の線が見やすくなります。「描いた線を選んで直す」で、線をクリックして選び、角の点をドラッグで動かしたり、線ごと削除したりできます。Enter=確定 / C=閉じる / Shift=直角 / Ctrl+Z=元に戻す。</p></div></div>
+    <div class="helpItem"><div class="ic">✏️</div><div><b>作図(現況構造物)</b><p>道路端・側溝・擁壁・建物・電柱などを点群の上からなぞって描きます。真上の平行投影で表示され、「段差・勾配を強調」の色で縁石や法肩の線が見やすくなります。描く種類は色の丸で選びます。角の点はドラッグで移動、右クリックで削除できます。「✋直す」にすると、線の上をクリックして点を追加したり、線ごと削除したりできます。Enter=確定 / C=閉じる / Shift=直角 / Ctrl+Z=元に戻す。</p></div></div>
     <div class="helpItem"><div class="ic">📐</div><div><b>図面(CAD出力)</b><p>「📐図面」で等高線・標高点の平面図、「⛰️断面」で線を引いて断面図・連続横断図・縦断図をDXFで出力。曲がった道路は「線の引き方」を「中心線(折れ線)」にします。</p></div></div>
     <div class="helpItem"><div class="ic">💾</div><div><b>出力モード</b><p>編集した点群をLAS・CSV・TXTで保存します。点密度チェックもここ。「作業を保存」で今の作業をまるごとファイルに残し、あとで続きから再開できます(Ctrl+S)。「新規」で最初の画面に戻ります。</p></div></div>
     <div class="helpItem"><div class="ic">⌨️</div><div><b>キーボード(PC)</b><p>Ctrl+Z=元に戻す / Ctrl+Y=進む / Enter=範囲を確定 / Esc=やめる / Delete=選んだ点を削除</p></div></div>
@@ -845,7 +857,7 @@ input,select{font-family:inherit}
     <div class="helpItem"><div class="ic">⛰️</div><div><b>断面モード</b><p>2か所タップして線を引くと、その線に沿った断面図(横から見た形)が出ます。</p></div></div>
     <div class="helpItem"><div class="ic">🧮</div><div><b>土量モード</b><p>基準の高さ(計画高)より上を切土、下を盛土として計算します。範囲を囲み、切土・盛土の法面勾配(1割5分など)を指定すると、法面の土量も含めて計算します。</p></div></div>
     <div class="helpItem"><div class="ic">🔄</div><div><b>向きがおかしい時</b><p>⚙️設定 → 寝そべって見えたら「横倒しを起こす」、逆さまなら「上下を反転」。</p></div></div>
-    <div class="helpItem"><div class="ic">💡</div><div><b>コツ</b><p>測定モード中でもドラッグで視点は動かせます。タップ(すぐ離す)で点を選択します。<br>小窓は、枠の外をクリックするか右上の ✕ で閉じます。下のメニューをもう一度押すと開きます。<br>点群の色は、画面左の「🎨色」でいつでも切り替えられます。</p></div></div>
+    <div class="helpItem"><div class="ic">💡</div><div><b>コツ</b><p>測定モード中でもドラッグで視点は動かせます。タップ(すぐ離す)で点を選択します。<br>小窓は、枠の外をクリックするか右上の ✕ で閉じます。下のメニューをもう一度押すと開きます。小窓の ⓘ を押すと説明文が出ます。▸ の付いた見出しは押すと開きます。小窓の左端をドラッグすると幅を変えられます。<br>点群の色は、画面左の「🎨色」でいつでも切り替えられます。</p></div></div>
     <button class="btn full" id="helpCloseBtn">閉じる</button>
   </div>
 </div>
@@ -1547,7 +1559,11 @@ function onTap(clientX, clientY, btn=0){
       if(btn === 0) traceSelectAt(clientX, clientY);
       else if(btn === 2){ const h = traceHit(clientX, clientY, false); if(h && h.vi !== undefined) deleteTraceVertex(h.fi, h.vi); }   // 右クリック=その点を消す
     }
-    else if(btn === 2) finishTrace(false); else if(btn === 0) addTraceVertex(clientX, clientY);
+    else if(btn === 2){
+      if(traceCur) finishTrace(false);
+      else{ const h = traceHit(clientX, clientY, false); if(h && h.vi !== undefined) deleteTraceVertex(h.fi, h.vi); }   // 描いていない時の右クリック=その点を消す
+    }
+    else if(btn === 0) addTraceVertex(clientX, clientY);
     return;
   }
   if(mode === 'merge' && mergePick){
@@ -3772,7 +3788,7 @@ function setTraceEdit(on){
   if(on === traceEdit) return;
   if(on){ if(traceCur && traceCur.pts.length >= 2) finishTrace(false); else traceCur = null; }
   traceEdit = on; traceSel = traceSelV = -1;
-  if(on) setGuide('✋ 線をクリックで選ぶ → 角の点をドラッグで移動 / 点を右クリックで点を削除 / Delete で削除');
+  if(on) setGuide('✋ 丸をドラッグ=移動 / 線の上をクリック=点を追加 / 丸を右クリック=点を削除');
   else if(mode === 'trace'){ const t = traceType; setTraceType(t); }
   renderTraceTypes();
   traceChanged(false);
@@ -3789,14 +3805,27 @@ function traceHit(x, y, touch){
       if(d < dv){ dv = d; bv = {fi, vi}; }
     });
     const n = f.closed ? sp.length : sp.length-1;
-    for(let i=0;i<n;i++){ const d = distToSeg(x, y, sp[i], sp[(i+1)%sp.length]); if(d < dl){ dl = d; bl = {fi}; } }
+    for(let i=0;i<n;i++){
+      const a = sp[i], b = sp[(i+1)%sp.length], vx = b[0]-a[0], vy = b[1]-a[1], L2 = vx*vx+vy*vy;
+      const t = L2 ? Math.max(0, Math.min(1, ((x-a[0])*vx + (y-a[1])*vy)/L2)) : 0;
+      const d = Math.hypot(x-(a[0]+t*vx), y-(a[1]+t*vy));
+      if(d < dl){ dl = d; bl = {fi, si: i, t}; }   // si 番目の区間の、割合 t の位置
+    }
   });
   return bv || bl;
 }
+// 直す中のクリック:丸=選ぶ / 線の上=そこに点を追加 / 何もない所=選択を外す
 function traceSelectAt(x, y){
   const h = traceHit(x, y, false);
+  if(h && h.vi === undefined){
+    const f = traces[h.fi], a = f.pts[h.si], b = f.pts[(h.si+1) % f.pts.length], t = h.t;
+    pushTraceUndo();
+    f.pts.splice(h.si+1, 0, {x: a.x+(b.x-a.x)*t, y: a.y+(b.y-a.y)*t, z: a.z+(b.z-a.z)*t});
+    traceSel = h.fi; traceSelV = h.si+1;
+    traceChanged(); return;
+  }
   traceSel = h ? h.fi : -1;
-  traceSelV = h && h.vi !== undefined ? h.vi : -1;
+  traceSelV = h ? h.vi : -1;
   renderTraceList();
 }
 // 角の点を1つ消す。連続線の途中の点なら、前後の点が直接つながる
@@ -3821,14 +3850,15 @@ function deleteSelectedTrace(){
 const traceDrag = {
   cur: null,
   start(x, y, touch=false){
-    if(mode !== 'trace' || !traceEdit) return false;
+    // 直す中はいつでも。描くモードでも、線を描いている途中でなければ角の点を動かせる
+    if(mode !== 'trace' || (!traceEdit && traceCur)) return false;
     const h = traceHit(x, y, touch);
     if(!h || h.vi === undefined) return false;
     const p = traces[h.fi].pts[h.vi];
     const h0 = hitAtZ(x, y, p.z - globalOffset.z);
     if(!h0) return false;
     this.cur = {...h, orig: {...p}, h0, moved: false, last: [x, y]};
-    traceSel = h.fi; traceSelV = h.vi; renderTraceList();
+    if(traceEdit){ traceSel = h.fi; traceSelV = h.vi; renderTraceList(); }
     renderer.domElement.style.cursor = 'grabbing';
     return true;
   },
@@ -3859,9 +3889,9 @@ const traceDrag = {
   },
   hover(x, y){
     if(mode !== 'trace') return;
-    if(!traceEdit){ renderer.domElement.style.cursor = 'crosshair'; return; }
-    const h = traceHit(x, y, false);
-    renderer.domElement.style.cursor = !h ? '' : (h.vi !== undefined ? 'grab' : 'pointer');
+    const h = traceEdit || !traceCur ? traceHit(x, y, false) : null;
+    if(!traceEdit){ renderer.domElement.style.cursor = h && h.vi !== undefined ? 'grab' : 'crosshair'; return; }
+    renderer.domElement.style.cursor = !h ? '' : (h.vi !== undefined ? 'grab' : 'copy');
   }
 };
 function traceChanged(save=true){
@@ -3918,26 +3948,21 @@ function traceArea(f){
   return Math.abs(s)/2;
 }
 function renderTraceList(){
-  const el = $('traceList'); if(!el) return;
+  if(!$('trEditBtn')) return;
   $('traceDrawRow').style.display = traceCur ? '' : 'none';
   if(traceCur) $('traceCurInfo').textContent = `${TT(traceCur.type).name}:${traceCur.pts.length} 点`;
-  $('traceCount').textContent = traces.length ? `(${traces.length})` : '';
   $('trEditBtn').classList.toggle('ghost', !traceEdit);
-  $('trEditBtn').textContent = traceEdit ? '✋ 直すのを終わる(描くに戻る)' : '✋ 描いた線を選んで直す';
+  $('trEditBtn').textContent = traceEdit ? '✋ 直すを終わる' : '✋ 直す';
   $('trEditRow').style.display = traceEdit ? '' : 'none';
   $('trDelSelBtn').disabled = traceSel < 0;
   $('trDelVtxBtn').disabled = traceSel < 0 || traceSelV < 0;
-  if(!traces.length){ el.innerHTML = '<p class="hint" style="margin-top:6px">まだ作図はありません。</p>'; return; }
-  el.innerHTML = traces.map((f, i) => {
-    const T = TT(f.type);
-    const info = T.type === 'point' ? `Z ${f.pts[0].z.toFixed(2)}`
-      : (f.closed ? `周長 ${traceLen(f).toFixed(2)}m・面積 ${traceArea(f).toFixed(1)}m²` : `延長 ${traceLen(f).toFixed(2)}m`);
-    return `<div class="trItem${i === traceSel ? ' sel' : ''}" data-i="${i}"><span class="dot" style="background:${T.color}"></span><b>${T.name}</b><span class="trInfo">${info}</span><button class="trDel" data-i="${i}" title="削除">✕</button></div>`;
-  }).reverse().join('');
 }
 function renderTraceTypes(){
+  const kind = t => t.type === 'point' ? '点' : (t.type === 'polygon' ? '囲む' : '線');
   $('traceTypes').innerHTML = TRACE_TYPES.map(t =>
-    `<button class="ttBtn ${t.id===traceType && !traceEdit?'on':''}" data-t="${t.id}"><span class="dot" style="background:${t.color}"></span>${t.name}<small>${t.type==='point'?'点':(t.type==='polygon'?'囲む':'線')}</small></button>`).join('');
+    `<button class="ttChip ${t.type==='point'?'pt':(t.type==='polygon'?'poly':'')} ${t.id===traceType && !traceEdit?'on':''}" data-t="${t.id}" title="${t.name}(${kind(t)})" style="--c:${t.color}"></button>`).join('');
+  const T = TT(traceType);
+  $('traceTypeName').innerHTML = traceEdit ? '直しています<small>色を押すと描くに戻ります</small>' : `${T.name}<small>${kind(T)}</small>`;
 }
 function setTraceType(id){
   if(traceCur && traceCur.pts.length >= 2) finishTrace(false);
@@ -4079,11 +4104,12 @@ function drawTraceOverlay(ctx){
   if(traceEdit && traces[traceSel]) drawTraceSelected(ctx, traces[traceSel]);
   for(const f of traces) drawTraceFeature(ctx, f, false);
   if(traceEdit){
-    if(traces[traceSel]) traces[traceSel].pts.forEach((p, vi) => {
-      const q = toScreen(toLocal(p)), on = vi === traceSelV;   // 選んだ点はオレンジで大きく
-      ctx.beginPath(); ctx.arc(q[0], q[1], on ? 8.5 : 6.5, 0, Math.PI*2); ctx.fillStyle = on ? '#ff8a2a' : '#fff'; ctx.fill();
-      ctx.lineWidth = 2.5; ctx.strokeStyle = on ? '#fff' : TT(traces[traceSel].type).color; ctx.stroke();
-    });
+    // すべての角の点をつかめる丸で表示(選んだ点はオレンジで大きく)
+    traces.forEach((f, fi) => f.pts.forEach((p, vi) => {
+      const q = toScreen(toLocal(p)), on = fi === traceSel && vi === traceSelV;
+      ctx.beginPath(); ctx.arc(q[0], q[1], on ? 8.5 : 5.5, 0, Math.PI*2); ctx.fillStyle = on ? '#ff8a2a' : '#fff'; ctx.fill();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = on ? '#fff' : TT(f.type).color; ctx.stroke();
+    }));
     return;
   }
   if(traceCur && traceCur.pts.length) drawTraceFeature(ctx, traceCur, true);
@@ -5580,12 +5606,49 @@ function wireUI(){
       else setMode(b.dataset.mode);
     });
   });
+  const store = (k, v) => { try{ if(v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); }catch(e){} return null; };
+  if(store('tengun_hints') === '1') document.body.classList.add('showHints');
   document.querySelectorAll('.panel > h3').forEach(h => {
+    const i = document.createElement('button');
+    i.className = 'panelHelp'; i.textContent = 'ⓘ'; i.title = '説明を表示する/隠す';
+    i.addEventListener('click', ()=> store('tengun_hints', document.body.classList.toggle('showHints') ? '1' : '0'));
+    h.appendChild(i);
     const x = document.createElement('button');
     x.className = 'panelClose'; x.textContent = '✕'; x.title = '閉じる(下のメニューをもう一度押すと開きます)';
     x.addEventListener('click', closePanel);
     h.appendChild(x);
   });
+  // 見出しを押すと開け閉めできる項目(たまにしか使わないものは最初は閉じておく)
+  const closedAtStart = s => !!s.closest('#panel-edit') || s.id === 'secCad' || !!s.querySelector('#densityBtn, #swapXYBtn, #mergeHist')
+    || (!!s.closest('#panel-tin') && s !== document.querySelector('#panel-tin .sec'));
+  document.querySelectorAll('.panel div.sec').forEach(s => {
+    const t = s.firstElementChild;
+    if(!t || !t.classList.contains('secTitle')) return;
+    s.classList.add('fold');
+    if(closedAtStart(s)) s.classList.add('closed');
+    t.addEventListener('click', ()=> s.classList.toggle('closed'));
+  });
+  // 小窓の左端をドラッグして幅を変える(PCの画面のみ)
+  const pw0 = parseFloat(store('tengun_panel_w'));
+  if(pw0 > 0) document.documentElement.style.setProperty('--panel-w', pw0 + 'px');
+  let pwRight = null, pwNow = 0;
+  const panelEdge = e => {
+    if(window.innerWidth < 900) return null;
+    const p = document.querySelector('.panel.open'); if(!p) return null;
+    const r = p.getBoundingClientRect();
+    return Math.abs(e.clientX - r.left) < 7 && e.clientY > r.top && e.clientY < r.bottom ? r : null;
+  };
+  document.addEventListener('mousedown', e => {
+    const r = e.button === 0 ? panelEdge(e) : null; if(!r) return;
+    e.preventDefault(); e.stopPropagation();
+    pwRight = r.right;
+  }, true);
+  window.addEventListener('mousemove', e => {
+    if(pwRight === null){ document.documentElement.classList.toggle('edgeHover', !!panelEdge(e)); return; }
+    pwNow = Math.max(220, Math.min(window.innerWidth - 140, pwRight - e.clientX));
+    document.documentElement.style.setProperty('--panel-w', pwNow + 'px');
+  });
+  window.addEventListener('mouseup', ()=>{ if(pwRight !== null){ pwRight = null; if(pwNow) store('tengun_panel_w', pwNow); } });
   $('quickColor').addEventListener('pointerdown', ()=>{ $('quickColor').value = $('colorMode').value; });
   $('quickColor').addEventListener('change', ()=>{
     $('colorMode').value = $('quickColor').value;
@@ -5794,7 +5857,7 @@ function wireUI(){
   $('volBase').addEventListener('input', clearVolResult);
   $('volShowColor').addEventListener('change', showVolColors);
   // 作図
-  $('traceTypes').addEventListener('click', e => { const b = e.target.closest('.ttBtn'); if(b) setTraceType(b.dataset.t); });
+  $('traceTypes').addEventListener('click', e => { const b = e.target.closest('.ttChip'); if(b) setTraceType(b.dataset.t); });
   $('traceTop').addEventListener('change', applyTraceView);
   $('traceColor').addEventListener('change', ()=>{
     const v = $('traceColor').value;
@@ -5811,12 +5874,6 @@ function wireUI(){
   $('trBackBtn').addEventListener('click', traceUndo);
   $('trCancelBtn').addEventListener('click', cancelTrace);
   $('trUndoBtn').addEventListener('click', traceUndo);
-  $('traceList').addEventListener('click', e => {
-    const b = e.target.closest('.trDel');
-    if(b){ deleteTrace(+b.dataset.i); return; }
-    const it = e.target.closest('.trItem');
-    if(it){ setTraceEdit(true); traceSel = +it.dataset.i; traceSelV = -1; renderTraceList(); }   // 一覧から選ぶ
-  });
   $('trEditBtn').addEventListener('click', ()=> setTraceEdit(!traceEdit));
   $('trDelSelBtn').addEventListener('click', deleteSelectedTrace);
   $('trDelVtxBtn').addEventListener('click', deleteSelectedVertex);
