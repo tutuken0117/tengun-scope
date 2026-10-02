@@ -112,10 +112,10 @@ html.edgeHover, html.edgeHover *{cursor:ew-resize !important}
 .btn.danger{background:var(--red);color:#fff}
 .btn.redframe{background:rgba(255,93,93,.14);border:2px solid var(--red);color:#fff}
 /* 保存ダイアログ */
-#saveModal{position:fixed;inset:0;z-index:55;background:rgba(5,7,10,.7);display:none;align-items:center;justify-content:center;padding:16px}
-#saveModal.show{display:flex}
-#saveBox{width:min(440px,100%);background:var(--panel);border:1px solid var(--panel-border);border-radius:18px;padding:18px}
-#saveBox h2{font-size:15px;font-weight:900;margin-bottom:10px}
+#saveModal,#askModal{position:fixed;inset:0;z-index:55;background:rgba(5,7,10,.7);display:none;align-items:center;justify-content:center;padding:16px}
+#saveModal.show,#askModal.show{display:flex}
+#saveBox,#askBox{width:min(440px,100%);background:var(--panel);border:1px solid var(--panel-border);border-radius:18px;padding:18px}
+#saveBox h2,#askBox h2{font-size:15px;font-weight:900;margin-bottom:10px}
 .nameRow{display:flex;align-items:center;gap:6px}
 .nameRow input{flex:1;min-width:0;background:rgba(0,0,0,.3);border:1px solid var(--panel-border);border-radius:10px;color:var(--text);padding:10px;font-size:15px}
 .nameRow span{font-size:14px;color:var(--text-dim);font-weight:700}
@@ -841,7 +841,7 @@ body:not(.showHints) .panel p.hint:not([id]){display:none}
     Scaniverse等のiPhoneスキャンアプリのPLYもOK<br>
     ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。<br>
     保存した作業ファイル(.tgscope)もここから開けます。<br>
-    バージョン 2026-10-02j
+    バージョン 2026-10-02k
   </div>
 </div>
 
@@ -871,6 +871,15 @@ body:not(.showHints) .panel p.hint:not([id]){display:none}
     <div class="helpItem"><div class="ic">🔄</div><div><b>向きがおかしい時</b><p>⚙️設定 → 寝そべって見えたら「横倒しを起こす」、逆さまなら「上下を反転」。</p></div></div>
     <div class="helpItem"><div class="ic">💡</div><div><b>コツ</b><p>測定モード中でもドラッグで視点は動かせます。タップ(すぐ離す)で点を選択します。<br>小窓は、枠の外をクリックするか右上の ✕ で閉じます。下のメニューをもう一度押すと開きます。小窓の ⓘ を押すと説明文が出ます。▸ の付いた見出しは押すと開きます。小窓の左端をドラッグすると幅を変えられます。<br>点群の色は、画面左の「🎨色」でいつでも切り替えられます。</p></div></div>
     <button class="btn full" id="helpCloseBtn">閉じる</button>
+  </div>
+</div>
+
+<div id="askModal">
+  <div id="askBox">
+    <h2>💾 保存してから新規にしますか?</h2>
+    <p class="hint">今の作業には、まだ保存していない内容があります。</p>
+    <div class="btnRow"><button class="btn" id="askSave">保存して新規</button><button class="btn ghost" id="askDiscard">保存しないで新規</button></div>
+    <div class="btnRow"><button class="btn ghost" id="askCancel">やめる</button></div>
   </div>
 </div>
 
@@ -2406,6 +2415,7 @@ function startCoordPick(kind){
 function endCoordPick(){ coordPickMode = null; setGuide(''); }
 
 function handleCoordPick(p){
+  projDirty = true;
   const real = {x:p.x+globalOffset.x, y:p.y+globalOffset.y, z:p.z+globalOffset.z};
   if(coordPickMode === 'gcp'){
     let no = gcps.length + 1;
@@ -3450,9 +3460,10 @@ async function chooseSaveTarget(suggested){
 }
 async function saveFlow(suggested, label, build){
   const target = await chooseSaveTarget(suggested);
-  if(!target) return;
+  if(!target) return false;
   showLoading(label);
   await new Promise(r => setTimeout(r, 40));
+  let ok = false;   // 保存できたら true
   try{
     const r = build();
     if(r.error){ toast('⚠️ ' + r.error, 4500); }
@@ -3462,9 +3473,11 @@ async function saveFlow(suggested, label, build){
         await w.write(r.blob); await w.close();
       }else downloadBlob(r.blob, target.name);
       toast(`💾「${target.name}」を保存しました` + (r.msg ? `(${r.msg})` : ''), 4500);
+      ok = true;
     }
   }catch(e){ console.error(e); toast('⚠️ ' + e.message, 5000); }
   hideLoading();
+  return ok;
 }
 function baseName(){ return (loadedFileName || 'pointcloud'); }
 
@@ -4050,6 +4063,7 @@ const traceDrag = {
   }
 };
 function traceChanged(save=true){
+  if(save) projDirty = true;
   if(traceSel >= traces.length) traceSel = traceSelV = -1;
   rebuildTraceScene();
   renderTraceList();
@@ -4361,6 +4375,7 @@ function addVolVertex(x, y){
   updateVolUI();
 }
 function closeVolPoly(){
+  projDirty = true;
   if(!volDrawing) return;
   if(volPoly.pts.length < 3){ toast('3か所以上クリックして囲んでください'); return; }
   volPoly.closed = true;
@@ -4644,6 +4659,7 @@ function tinWithout(tin, keep){
   return {...tin, pts, tri: Uint32Array.from(out), fill, edited: tin.edited + (n-k), _loc: null};
 }
 function applyTinEdit(keep){
+  projDirty = true;
   const t = tinWithout(tinEx, keep);
   if(!t) return 0;
   tinUndoStack.push(tinEx); if(tinUndoStack.length > 30) tinUndoStack.shift();
@@ -5563,6 +5579,7 @@ function sesDB(){
 }
 let sesDisabled = false;   // 新規作成でリロードする直前は保存しない
 function scheduleCloudSave(){
+  projDirty = true;   // 点群が変わった＝保存していない変更がある
   if(sesRestoring || sesDisabled || !positions) return;
   clearTimeout(sesTimer);
   sesTimer = setTimeout(saveCloudSession, 300);
@@ -5625,9 +5642,23 @@ function buildProject(){
   if(tinEx) parts.push(tinEx.pts, tinEx.tri);
   return {blob: new Blob(parts, {type:'application/octet-stream'}), msg: `${fmtInt(positions.length/3)} 点`};
 }
-function saveProject(){
-  if(!positions){ toast('先に点群を読み込んでください'); return; }
-  saveFlow(baseName() + PROJ_EXT, '作業を保存中...', buildProject);
+let projDirty = false;   // 作業ファイルに保存していない変更があるか
+async function saveProject(){
+  if(!positions){ toast('先に点群を読み込んでください'); return false; }
+  const ok = await saveFlow(baseName() + PROJ_EXT, '作業を保存中...', buildProject);
+  if(ok) projDirty = false;
+  return ok;
+}
+// 保存していない時の確認。'save'=保存して進む / 'discard'=保存しないで進む / 'cancel'=やめる
+function askUnsaved(){
+  return new Promise(resolve => {
+    const m = $('askModal');
+    m.classList.add('show');
+    const done = v => { m.classList.remove('show'); $('askSave').onclick = $('askDiscard').onclick = $('askCancel').onclick = null; resolve(v); };
+    $('askSave').onclick = () => done('save');
+    $('askDiscard').onclick = () => done('discard');
+    $('askCancel').onclick = () => done('cancel');
+  });
 }
 async function loadProject(buffer){
   const u8 = new Uint8Array(buffer);
@@ -5652,10 +5683,16 @@ async function loadProject(buffer){
     if(head.ui) applyUiState(head.ui);
   }finally{ sesRestoring = false; }
   scheduleCloudSave();
+  projDirty = false;
   toast('作業を開きました。続きから作業できます', 4000);
 }
 async function newWork(){
-  if(positions && !confirm('今の作業を閉じて、最初の画面に戻ります。\n保存していない内容は消えます。よろしいですか?')) return;
+  // 保存していない変更がある時だけ、保存するかを聞く
+  if(positions && projDirty){
+    const a = await askUnsaved();
+    if(a === 'cancel') return;
+    if(a === 'save' && !(await saveProject())) return;   // 保存をやめた・失敗した時は新規にしない
+  }
   sesDisabled = true; clearTimeout(sesTimer); sesTimer = 0;
   try{ localStorage.removeItem(SES_UI); }catch(e){}
   try{
