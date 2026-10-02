@@ -355,7 +355,7 @@ body:not(.showHints) .panel p.hint:not([id]){display:none}
   <button class="modeBtn" data-mode="edit"><span class="ic">✂️</span>除去</button>
   <button class="modeBtn" data-mode="coord"><span class="ic">📍</span>座標</button>
   <button class="modeBtn" data-mode="merge"><span class="ic">🧩</span>つなぐ</button>
-  <button class="modeBtn" data-mode="dist"><span class="ic">📏</span>距離</button>
+  <button class="modeBtn" data-mode="dist"><span class="ic">📏</span>計測</button>
   <button class="modeBtn" data-mode="section"><span class="ic">⛰️</span>断面</button>
   <button class="modeBtn" data-mode="volume"><span class="ic">🧮</span>土量</button>
   <button class="modeBtn" data-mode="tin"><span class="ic">🔺</span>TIN</button>
@@ -367,16 +367,23 @@ body:not(.showHints) .panel p.hint:not([id]){display:none}
 
 <!-- 距離パネル -->
 <div class="panel" id="panel-dist">
-  <h3>📏 距離測定 <span class="tag">画面の点をタップ</span></h3>
-  <p class="hint" id="distHint">測りたい <b>1点目</b> をタップしてください。</p>
+  <h3>📏 計測</h3>
+  <div class="btnRow" style="margin-top:0" id="measKinds">
+    <button class="btn" data-k="dist">距離</button><button class="btn ghost" data-k="path">道のり</button><button class="btn ghost" data-k="area">面積</button>
+  </div>
+  <p class="hint" id="distHint" style="margin-top:10px">測りたい <b>1点目</b> をタップしてください。</p>
   <div class="resultGrid three" id="distResults" style="display:none">
-    <div class="resCard hl"><div class="k">斜距離</div><div class="v" id="dist3d">-</div></div>
-    <div class="resCard"><div class="k">水平距離</div><div class="v" id="distH">-</div></div>
-    <div class="resCard"><div class="k">高低差</div><div class="v" id="distV">-</div></div>
+    <div class="resCard hl"><div class="k" id="distK1">斜距離</div><div class="v" id="dist3d">-</div></div>
+    <div class="resCard"><div class="k" id="distK2">水平距離</div><div class="v" id="distH">-</div></div>
+    <div class="resCard"><div class="k" id="distK3">高低差</div><div class="v" id="distV">-</div></div>
+  </div>
+  <div class="btnRow" id="measMultiRow" style="display:none">
+    <button class="btn" id="measDoneBtn">確定</button><button class="btn ghost" id="measBackBtn">↶ 1点戻す</button>
   </div>
   <div class="btnRow">
     <button class="btn ghost" id="distClearBtn">やり直す</button>
   </div>
+  <p class="hint">距離=2点間。道のり=クリックした順につないだ長さ(水平)。面積=囲んだ範囲の水平面積。道のり・面積は、最後の点を打ったら <b>右クリック・Enter・「確定」</b>で終わります。結果は画面の上にも出ます。点はドラッグで動かせます。</p>
 </div>
 
 <!-- 断面パネル -->
@@ -830,7 +837,7 @@ body:not(.showHints) .panel p.hint:not([id]){display:none}
     Scaniverse等のiPhoneスキャンアプリのPLYもOK<br>
     ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。<br>
     保存した作業ファイル(.tgscope)もここから開けます。<br>
-    バージョン 2026-10-02e
+    バージョン 2026-10-02f
   </div>
 </div>
 
@@ -854,7 +861,7 @@ body:not(.showHints) .panel p.hint:not([id]){display:none}
     <div class="helpItem"><div class="ic">📐</div><div><b>図面(CAD出力)</b><p>「📐図面」で等高線・標高点の平面図、「⛰️断面」で線を引いて断面図・連続横断図・縦断図をDXFで出力。曲がった道路は「線の引き方」を「中心線(折れ線)」にします。</p></div></div>
     <div class="helpItem"><div class="ic">💾</div><div><b>出力モード</b><p>編集した点群をLAS・CSV・TXTで保存します。点密度チェックもここ。「作業を保存」で今の作業をまるごとファイルに残し、あとで続きから再開できます(Ctrl+S)。「新規」で最初の画面に戻ります。</p></div></div>
     <div class="helpItem"><div class="ic">⌨️</div><div><b>キーボード(PC)</b><p>Ctrl+Z=元に戻す / Ctrl+Y=進む / Enter=範囲を確定 / Esc=やめる / Delete=選んだ点を削除</p></div></div>
-    <div class="helpItem"><div class="ic">📏</div><div><b>距離モード</b><p>点群の上を2か所タップすると、斜距離・水平距離・高低差が出ます。</p></div></div>
+    <div class="helpItem"><div class="ic">📏</div><div><b>計測モード</b><p>距離=2か所タップで斜距離・水平距離・高低差。道のり=順にタップしてつないだ長さ(水平)。面積=囲んだ範囲の水平面積と周長。道のり・面積は右クリックか Enter で確定します。結果は画面の上にも出るので、小窓を閉じていても見えます。</p></div></div>
     <div class="helpItem"><div class="ic">⛰️</div><div><b>断面モード</b><p>2か所タップして線を引くと、その線に沿った断面図(横から見た形)が出ます。</p></div></div>
     <div class="helpItem"><div class="ic">🧮</div><div><b>土量モード</b><p>基準の高さ(計画高)より上を切土、下を盛土として計算します。範囲を囲み、切土・盛土の法面勾配(1割5分など)を指定すると、法面の土量も含めて計算します。</p></div></div>
     <div class="helpItem"><div class="ic">🔄</div><div><b>向きがおかしい時</b><p>⚙️設定 → 寝そべって見えたら「横倒しを起こす」、逆さまなら「上下を反転」。</p></div></div>
@@ -1575,6 +1582,7 @@ function onTap(clientX, clientY, btn=0){
     if(btn === 2) closeVolPoly(); else if(btn === 0) addVolVertex(clientX, clientY);
     return;
   }
+  if(mode === 'dist' && btn === 2){ finishMeasure(); return; }   // 道のり・面積を右クリックで確定
   if(btn !== 0) return;
   // 点を選ぶ操作の途中でなければ、枠外のクリックで小窓を閉じる
   if(!(mode === 'volume' && volPick) && !(mode === 'coord' && coordPickMode) && mode !== 'dist' && mode !== 'section'){
@@ -1642,6 +1650,7 @@ function drawOverlay(){
   }
 
   drawTraceOverlay(ctx);
+  drawMeasureOverlay(ctx);
   drawVolOverlay(ctx);
   drawMergeOverlay(ctx);
 
@@ -1662,8 +1671,9 @@ function drawOverlay(){
 }
 
 function addPicked(p){
-  const multi = mode === 'section' && $('lineKind').value === 'poly';
+  const multi = (mode === 'section' && $('lineKind').value === 'poly') || (mode === 'dist' && measKind !== 'dist');
   if(!multi && picked.length >= 2) picked = [];
+  if(mode === 'dist' && measDone){ picked = []; measDone = false; }   // 確定後のクリックは新しい計測
   picked.push(p);
   refreshMarkers();
   if(mode === 'dist') updateDistUI();
@@ -1691,31 +1701,79 @@ function clearMarkers(){
   }
 }
 function clearPicks(){
-  picked = [];
+  picked = []; measDone = false;
   clearMarkers();
 }
 
 /* =========================================================
    距離測定
    ========================================================= */
-function updateDistUI(){
-  const hint = $('distHint'), res = $('distResults');
-  if(picked.length === 0){
-    hint.style.display=''; res.style.display='none';
-    hint.innerHTML = '測りたい <b>1点目</b> をタップしてください。';
-  }else if(picked.length === 1){
-    hint.style.display=''; res.style.display='none';
-    hint.innerHTML = '🟠 1点目OK! 次に <b>2点目</b> をタップしてください。';
-  }else{
-    hint.style.display='none'; res.style.display='';
-    const [a,b] = picked;
-    const d3 = a.distanceTo(b);
-    const dh = Math.hypot(b.x-a.x, b.y-a.y);
-    const dv = Math.abs(b.z-a.z);
-    $('dist3d').innerHTML = `${fmt(d3)}<small>m</small>`;
-    $('distH').innerHTML = `${fmt(dh)}<small>m</small>`;
-    $('distV').innerHTML = `${fmt(dv)}<small>m</small>`;
+let measKind = 'dist';   // 'dist'=2点間 / 'path'=道のり / 'area'=面積
+let measDone = false;    // 道のり・面積を確定したか(次のクリックで新しく測り始める)
+// 今の計測結果 {cards:[[見出し,値,単位]×3], lines:[画面に出す文], at:表示位置} / まだ出せない時は null
+function measureResult(){
+  const n = picked.length;
+  if(n < 2 || (measKind === 'area' && n < 3)) return null;
+  const hd = (a, b) => Math.hypot(b.x-a.x, b.y-a.y);
+  if(measKind === 'dist'){
+    const [a, b] = picked, d3 = a.distanceTo(b), dh = hd(a, b), dv = Math.abs(b.z-a.z);
+    return {cards: [['斜距離', fmt(d3), 'm'], ['水平距離', fmt(dh), 'm'], ['高低差', fmt(dv), 'm']],
+      lines: [`斜距離 ${fmt(d3)} m`, `水平 ${fmt(dh)} m / 高低差 ${fmt(dv)} m`], at: a.clone().add(b).multiplyScalar(0.5)};
   }
+  if(measKind === 'path'){
+    let sh = 0, s3 = 0;
+    for(let i=1;i<n;i++){ sh += hd(picked[i-1], picked[i]); s3 += picked[i-1].distanceTo(picked[i]); }
+    return {cards: [['道のり(水平)', fmt(sh), 'm'], ['斜距離の合計', fmt(s3), 'm'], ['区間', String(n-1), '']],
+      lines: [`道のり(水平) ${fmt(sh)} m`, `斜距離の合計 ${fmt(s3)} m`], at: picked[n-1]};
+  }
+  let s = 0, per = 0; const c = new THREE.Vector3();
+  for(let i=0;i<n;i++){ const a = picked[i], b = picked[(i+1)%n]; s += a.x*b.y - b.x*a.y; per += hd(a, b); c.add(a); }
+  const area = Math.abs(s)/2;
+  return {cards: [['面積(水平)', fmt(area), 'm²'], ['周長(水平)', fmt(per), 'm'], ['頂点', String(n), '']],
+    lines: [`面積(水平) ${fmt(area)} m²`, `周長 ${fmt(per)} m`], at: c.multiplyScalar(1/n)};
+}
+function setMeasKind(k){
+  measKind = k;
+  document.querySelectorAll('#measKinds .btn').forEach(b => b.classList.toggle('ghost', b.dataset.k !== k));
+  clearPicks(); updateDistUI();
+}
+function finishMeasure(){
+  if(measKind === 'dist' || measDone) return;
+  if(!measureResult()){ toast(measKind === 'area' ? '3点以上クリックしてください' : '2点以上クリックしてください'); return; }
+  measDone = true;
+  refreshMarkers(); updateDistUI();
+}
+function updateDistUI(){
+  const hint = $('distHint'), res = $('distResults'), n = picked.length, multi = measKind !== 'dist';
+  const r = measureResult();
+  res.style.display = r ? '' : 'none';
+  if(r) r.cards.forEach((c, i) => {
+    $('distK'+(i+1)).textContent = c[0];
+    $(['dist3d','distH','distV'][i]).innerHTML = `${c[1]}<small>${c[2]}</small>`;
+  });
+  $('measMultiRow').style.display = multi && n > 0 && !measDone ? '' : 'none';
+  let msg;
+  if(!multi) msg = n === 0 ? '測りたい <b>1点目</b> をタップしてください。' : (n === 1 ? '🟠 1点目OK! 次に <b>2点目</b> をタップしてください。' : '');
+  else if(measDone) msg = '✅ 確定しました。次にクリックすると、新しく測り始めます。';
+  else if(n === 0) msg = measKind === 'path' ? '道のりの <b>1点目</b> をタップしてください。' : '囲む範囲の <b>1点目</b> をタップしてください。';
+  else msg = `${n} 点。続けてタップ → 最後に <b>右クリック・Enter・確定</b>`;
+  hint.innerHTML = msg; hint.style.display = msg ? '' : 'none';
+  if(mode === 'dist') setGuide(!multi ? '📏 点群を2か所タップして距離を測る'
+    : measDone ? '' : (measKind === 'path' ? '📏 道のり:順にタップ → 右クリック・Enter で確定' : '📏 面積:囲むようにタップ → 右クリック・Enter で確定'));
+}
+// 計測結果を画面の上に出す(小窓を閉じていても見える)
+function drawMeasureOverlay(ctx){
+  if(mode !== 'dist') return;
+  const r = measureResult(); if(!r) return;
+  const v = r.at.clone().project(camera);
+  if(v.z > 1 || v.z < -1) return;
+  const W = window.innerWidth, H = window.innerHeight;
+  ctx.font = 'bold 13px sans-serif';
+  const w = Math.max(...r.lines.map(t => ctx.measureText(t).width)) + 20, h = r.lines.length*19 + 12;
+  const x = Math.max(8, Math.min(W-w-8, (v.x+1)/2*W + 14)), y = Math.max(70, Math.min(H-h-100, (1-v.y)/2*H - h - 10));
+  ctx.fillStyle = 'rgba(14,17,22,.88)'; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = measDone || measKind === 'dist' ? '#ff8a2a' : 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.5; ctx.strokeRect(x, y, w, h);
+  r.lines.forEach((t, i) => { ctx.fillStyle = i === 0 ? '#ff8a2a' : '#e8ecf1'; ctx.fillText(t, x+10, y+21+i*19); });
 }
 
 /* =========================================================
@@ -3157,7 +3215,9 @@ function refreshMarkers(){
     markerGroup.add(m);
   });
   if(picked.length >= 2){
-    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(picked), new THREE.LineBasicMaterial({color:0xffffff}));
+    // 面積の計測は、最後の点と最初の点も結ぶ
+    const pts = mode === 'dist' && measKind === 'area' && picked.length >= 3 ? [...picked, picked[0]] : picked;
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({color:0xffffff}));
     markerGroup.add(line);
   }
 }
@@ -5581,6 +5641,7 @@ function setMode(m){
   const g = $('modeGuide');
   if(guides[m]){ g.textContent = guides[m]; g.classList.add('show'); }
   else g.classList.remove('show');
+  if(m === 'dist') updateDistUI();   // 計測の種類に合わせた案内にする
   if(m === 'edit'){ prefillEditInputs(); updateEditUI(); }
   if(m === 'coord') renderGcpList();
   if(m === 'export') refreshExportUI();
@@ -5689,6 +5750,9 @@ function wireUI(){
   });
 
   $('distClearBtn').addEventListener('click', ()=>{ clearPicks(); updateDistUI(); });
+  $('measKinds').addEventListener('click', e => { const b = e.target.closest('.btn'); if(b) setMeasKind(b.dataset.k); });
+  $('measDoneBtn').addEventListener('click', finishMeasure);
+  $('measBackBtn').addEventListener('click', ()=>{ picked.pop(); refreshMarkers(); updateDistUI(); });
   $('sectionClearBtn').addEventListener('click', ()=>{ clearPicks(); updateSectionUI(); });
   $('sectionWidth').addEventListener('input', ()=>{
     $('sectionWidthVal').textContent = fmt(parseFloat($('sectionWidth').value),2)+' m';
@@ -5948,6 +6012,7 @@ function wireUI(){
       return;
     }
     if(typing) return;
+    if(mode === 'dist' && e.key === 'Enter' && measKind !== 'dist'){ e.preventDefault(); finishMeasure(); return; }
     if(mode === 'volume' && volDrawing){
       if(e.key === 'Enter'){ e.preventDefault(); closeVolPoly(); return; }
       if(e.key === 'Escape'){ cancelVolPoly(); return; }
