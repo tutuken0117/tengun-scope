@@ -575,6 +575,7 @@ body:not(.showHints) .panel p.hint:not([id]){display:none}
     <div class="btnRow"><button class="btn" id="trFinishBtn">確定</button><button class="btn ghost" id="trCloseBtn">閉じて確定</button></div>
     <div class="btnRow"><button class="btn ghost" id="trBackBtn">↶ 1点戻す</button><button class="btn ghost" id="trCancelBtn">やめる</button></div>
   </div>
+  <div class="btnRow"><button class="btn ghost" id="trRotBtn">🔄 回転できるようにする</button></div>
   <div class="btnRow"><button class="btn ghost" id="trEditBtn">✋ 直す</button><button class="btn ghost" id="trUndoBtn" title="元に戻す(Ctrl+Z)">↩️</button><button class="btn ghost" id="trRedoBtn" title="進む(Ctrl+Y)">↪️</button></div>
   <div id="trEditRow" style="display:none">
     <p class="hint" style="margin-top:6px">すべての角の点が白い丸で出ます。丸をドラッグ=移動(近くの別の点にくっつきます)。線の上をクリック=そこに点を追加。丸を右クリック=その点を削除(途中の点なら前後がつながります)。丸をクリックするとオレンジになり、下のボタンや Delete でも消せます。</p>
@@ -829,7 +830,7 @@ body:not(.showHints) .panel p.hint:not([id]){display:none}
     Scaniverse等のiPhoneスキャンアプリのPLYもOK<br>
     ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。<br>
     保存した作業ファイル(.tgscope)もここから開けます。<br>
-    バージョン 2026-10-02c
+    バージョン 2026-10-02d
   </div>
 </div>
 
@@ -3951,6 +3952,9 @@ function renderTraceList(){
   if(!$('trEditBtn')) return;
   $('traceDrawRow').style.display = traceCur ? '' : 'none';
   if(traceCur) $('traceCurInfo').textContent = `${TT(traceCur.type).name}:${traceCur.pts.length} 点`;
+  const free = !$('traceTop').checked;
+  $('trRotBtn').classList.toggle('ghost', !free);
+  $('trRotBtn').textContent = free ? '⬇️ 真上に固定する(いまは回転できます)' : '🔄 回転できるようにする';
   $('trEditBtn').classList.toggle('ghost', !traceEdit);
   $('trEditBtn').textContent = traceEdit ? '✋ 直すを終わる' : '✋ 直す';
   $('trEditRow').style.display = traceEdit ? '' : 'none';
@@ -5706,8 +5710,21 @@ function wireUI(){
     setView('human');
   });
   document.querySelectorAll('.viewBtn').forEach(b=>{
-    b.addEventListener('click', ()=> setView(b.dataset.view));
+    b.addEventListener('click', ()=>{
+      // 作図中:「真上」以外を押したら回転できる表示に、「真上」を押したら真上固定に戻す
+      if(mode === 'trace'){
+        $('traceTop').checked = b.dataset.view === 'top';
+        applyTraceView(); renderTraceList();
+        if(b.dataset.view === 'top') return;
+      }
+      setView(b.dataset.view);
+    });
   });
+  $('trRotBtn').addEventListener('click', ()=>{
+    $('traceTop').checked = !$('traceTop').checked;
+    applyTraceView(); renderTraceList();
+  });
+  $('traceTop').addEventListener('change', renderTraceList);
 
   // --- 元に戻す ---
   $('undoBtn').addEventListener('click', undo);
