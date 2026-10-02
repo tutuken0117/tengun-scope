@@ -383,7 +383,7 @@ body:not(.showHints) .panel p.hint:not([id]){display:none}
   <div class="btnRow">
     <button class="btn ghost" id="distClearBtn">やり直す</button>
   </div>
-  <p class="hint">距離=2点間。道のり=クリックした順につないだ長さ(水平)。面積=囲んだ範囲の水平面積。道のり・面積は、最後の点を打ったら <b>右クリック・Enter・「確定」</b>で終わります。結果は画面の上にも出ます。点はドラッグで動かせます。</p>
+  <p class="hint">距離=2点間。道のり=クリックした順につないだ長さ(水平)。面積=囲んだ範囲の水平面積と、実面積(打った点を結んだ面の、傾きを含めた面積。法面なら法面積)。道のり・面積は、最後の点を打ったら <b>右クリック・Enter・「確定」</b>で終わります。結果は画面の上にも出ます。点はドラッグで動かせます。</p>
 </div>
 
 <!-- 断面パネル -->
@@ -837,7 +837,7 @@ body:not(.showHints) .panel p.hint:not([id]){display:none}
     Scaniverse等のiPhoneスキャンアプリのPLYもOK<br>
     ※ LAZ(圧縮)は非対応です。変換ソフトでLASにしてから読み込んでください。<br>
     保存した作業ファイル(.tgscope)もここから開けます。<br>
-    バージョン 2026-10-02f
+    バージョン 2026-10-02g
   </div>
 </div>
 
@@ -861,7 +861,7 @@ body:not(.showHints) .panel p.hint:not([id]){display:none}
     <div class="helpItem"><div class="ic">📐</div><div><b>図面(CAD出力)</b><p>「📐図面」で等高線・標高点の平面図、「⛰️断面」で線を引いて断面図・連続横断図・縦断図をDXFで出力。曲がった道路は「線の引き方」を「中心線(折れ線)」にします。</p></div></div>
     <div class="helpItem"><div class="ic">💾</div><div><b>出力モード</b><p>編集した点群をLAS・CSV・TXTで保存します。点密度チェックもここ。「作業を保存」で今の作業をまるごとファイルに残し、あとで続きから再開できます(Ctrl+S)。「新規」で最初の画面に戻ります。</p></div></div>
     <div class="helpItem"><div class="ic">⌨️</div><div><b>キーボード(PC)</b><p>Ctrl+Z=元に戻す / Ctrl+Y=進む / Enter=範囲を確定 / Esc=やめる / Delete=選んだ点を削除</p></div></div>
-    <div class="helpItem"><div class="ic">📏</div><div><b>計測モード</b><p>距離=2か所タップで斜距離・水平距離・高低差。道のり=順にタップしてつないだ長さ(水平)。面積=囲んだ範囲の水平面積と周長。道のり・面積は右クリックか Enter で確定します。結果は画面の上にも出るので、小窓を閉じていても見えます。</p></div></div>
+    <div class="helpItem"><div class="ic">📏</div><div><b>計測モード</b><p>距離=2か所タップで斜距離・水平距離・高低差。道のり=順にタップしてつないだ長さ(水平)。面積=囲んだ範囲の水平面積・実面積(斜面)・周長。道のり・面積は右クリックか Enter で確定します。結果は画面の上にも出るので、小窓を閉じていても見えます。</p></div></div>
     <div class="helpItem"><div class="ic">⛰️</div><div><b>断面モード</b><p>2か所タップして線を引くと、その線に沿った断面図(横から見た形)が出ます。</p></div></div>
     <div class="helpItem"><div class="ic">🧮</div><div><b>土量モード</b><p>基準の高さ(計画高)より上を切土、下を盛土として計算します。範囲を囲み、切土・盛土の法面勾配(1割5分など)を指定すると、法面の土量も含めて計算します。</p></div></div>
     <div class="helpItem"><div class="ic">🔄</div><div><b>向きがおかしい時</b><p>⚙️設定 → 寝そべって見えたら「横倒しを起こす」、逆さまなら「上下を反転」。</p></div></div>
@@ -1726,11 +1726,16 @@ function measureResult(){
     return {cards: [['道のり(水平)', fmt(sh), 'm'], ['斜距離の合計', fmt(s3), 'm'], ['区間', String(n-1), '']],
       lines: [`道のり(水平) ${fmt(sh)} m`, `斜距離の合計 ${fmt(s3)} m`], at: picked[n-1]};
   }
-  let s = 0, per = 0; const c = new THREE.Vector3();
-  for(let i=0;i<n;i++){ const a = picked[i], b = picked[(i+1)%n]; s += a.x*b.y - b.x*a.y; per += hd(a, b); c.add(a); }
-  const area = Math.abs(s)/2;
-  return {cards: [['面積(水平)', fmt(area), 'm²'], ['周長(水平)', fmt(per), 'm'], ['頂点', String(n), '']],
-    lines: [`面積(水平) ${fmt(area)} m²`, `周長 ${fmt(per)} m`], at: c.multiplyScalar(1/n)};
+  let s = 0, per = 0; const c = new THREE.Vector3(), nv = new THREE.Vector3(), o = picked[0];
+  for(let i=0;i<n;i++){
+    const a = picked[i], b = picked[(i+1)%n];
+    s += a.x*b.y - b.x*a.y; per += hd(a, b); c.add(a);
+    // 実面積:打った点を結んだ面の、傾きを含めた面積(1点目を基準にして桁落ちを防ぐ)
+    nv.add(new THREE.Vector3().subVectors(a, o).cross(new THREE.Vector3().subVectors(b, o)));
+  }
+  const area = Math.abs(s)/2, real = nv.length()/2;
+  return {cards: [['面積(水平)', fmt(area), 'm²'], ['実面積(斜面)', fmt(real), 'm²'], ['周長(水平)', fmt(per), 'm']],
+    lines: [`面積(水平) ${fmt(area)} m²`, `実面積(斜面) ${fmt(real)} m²`, `周長 ${fmt(per)} m`], at: c.multiplyScalar(1/n)};
 }
 function setMeasKind(k){
   measKind = k;
